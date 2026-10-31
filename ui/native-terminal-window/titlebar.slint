@@ -1,0 +1,82 @@
+import { Palette } from "std-widgets.slint";
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+// 原生终端标题栏组件 / Native terminal titlebar component
+export component TerminalTitlebar inherits Rectangle {
+    // 标题文字（保持与 Rust CBT Hook 匹配的标题一致）/ Title text (matches Rust CBT Hook title)
+    in property <string> title: "原生终端日志 (Console Output)";
+
+    callback drag();
+    callback double-click();
+
+    // 激活状态（自适应深浅色模式与激活调色）/ Active state (adaptive to dark/light mode and active palette)
+    in-out property <bool> is-active: true;
+
+    private property <color> foreground-color:
+        root.is-active ? MicaTheme.text-primary : MicaTheme.text-inactive;
+    // 聚焦 / 失焦时前景色平滑过渡 / Fade the foreground smoothly on focus changes
+    animate foreground-color {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+
+    height: 36px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // 左侧可拖拽与标题内容区域 (微调的 >_ 终端图标与标题)
+        // 右侧按钮由 DWM 系统原生绘制，Slint 不绘制任何按钮
+        // Left drag area with icon and title.
+        // Right-side buttons are drawn by DWM natively, Slint draws no buttons.
+        drag-area := TouchArea {
+            horizontal-stretch: 1;
+            moved => {
+                if (self.pressed) {
+                    root.drag();
+                }
+            }
+
+            double-clicked => {
+                root.double-click();
+            }
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 8px;
+                spacing: 8px;
+                alignment: start;
+
+                // 终端 Glyph 图标 >_ / Terminal glyph icon >_
+                Text {
+                    text: ">_";
+                    font-size: 15px;
+                    font-family: "Consolas";
+                    font-weight: 700;
+                    color: Palette.accent-background;
+                    vertical-alignment: center;
+                }
+
+                // 标题文字 / Title text
+                Text {
+                    text: root.title;
+                    font-size: 13px;
+                    font-family: "Microsoft YaHei UI";
+                    font-weight: 600;
+                    color: root.foreground-color;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+
+        // 右侧 DWM 原生按钮占位区域（系统原生绘制与交互，Slint 保持透明不拦截）
+        // Right-side DWM native button placeholder area (natively drawn by OS; Slint remains transparent)
+        Rectangle {
+            width: 140px;
+            background: transparent;
+        }
+    }
+}

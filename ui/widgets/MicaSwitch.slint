@@ -1,0 +1,148 @@
+// ============================================================================
+// Mica 风格开关 / Mica style toggle switch
+//
+// 动效细节 / Motion details:
+//   · 滑块位移使用带轻微过冲的 Motion.lively，切换时更有弹性；
+//   · 悬停时轨道外浮现一圈很淡的光晕，按下时光晕扩大加深；
+//   · 按下时滑块同步放大，松手回落；
+//   · 焦点环随聚焦由 0 加粗到 2px。
+//
+// No scale property exists in Slint, so the thumb grows via width/height while
+// the track keeps a fixed size, which avoids layout jitter.
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaSwitch inherits Rectangle {
+    in property <string> text: "";
+    in-out property <bool> checked: false;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+
+    height: 24px;
+    opacity: root.enabled ? 1 : 0.4;
+
+    animate opacity {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+
+        Text {
+            text: root.text;
+            font-size: 13px;
+            color: MicaTheme.text-primary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        track := Rectangle {
+            width: 40px;
+            height: 20px;
+            border-radius: 10px;
+
+            background: root.checked ? MicaTheme.accent : MicaTheme.border-strong;
+            animate background {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+
+            // 光晕：悬停时淡入，按下时向外扩张并加深
+            // Halo: fades in on hover and expands/darkens while pressed
+            Rectangle {
+                x: touch.pressed ? -6px : -3px;
+                y: touch.pressed ? -6px : -3px;
+                width: parent.width - (self.x * 2);
+                height: parent.height - (self.y * 2);
+                border-radius: 20px;
+                background: MicaTheme.accent.with-alpha(
+                    touch.pressed ? 0.22 : (touch.has-hover ? 0.10 : 0));
+
+                animate x, y {
+                    duration: Motion.fast;
+                    easing: Motion.lively;
+                }
+                animate background {
+                    duration: Motion.fast;
+                    easing: Motion.standard;
+                }
+            }
+
+            // 焦点环：紧贴轨道外沿，由细到粗浮现
+            // Focus ring: hugs the track and thickens from 0 to 2px
+            Rectangle {
+                x: -3px;
+                y: -3px;
+                width: parent.width + 6px;
+                height: parent.height + 6px;
+                border-radius: 13px;
+                border-color: MicaTheme.focus-ring;
+                border-width: focus-scope.has-focus ? 2px : 0px;
+                opacity: focus-scope.has-focus ? 1 : 0;
+
+                animate opacity {
+                    duration: Motion.normal;
+                    easing: Motion.standard;
+                }
+                animate border-width {
+                    duration: Motion.normal;
+                    easing: Motion.lively;
+                }
+            }
+
+            thumb := Rectangle {
+                // 按下时滑块略微变大，模拟 Win11 的物理回馈
+                // The thumb grows slightly while pressed, mirroring Win11 physics
+                width: touch.pressed ? 16px : 14px;
+                height: touch.pressed ? 16px : 14px;
+                border-radius: 7px;
+                background: #ffffff;
+
+                // 位移带过冲，尺寸变化不带，避免视觉抖动
+                // Travel overshoots slightly; the size change does not, to avoid jitter
+                x: root.checked ? track.width - self.width - 2px : 2px;
+                y: (track.height - self.height) / 2;
+
+                animate x {
+                    duration: Motion.normal;
+                    easing: Motion.lively;
+                }
+                animate width, height {
+                    duration: Motion.fast;
+                    easing: Motion.standard;
+                }
+            }
+        }
+    }
+
+    focus-scope := FocusScope {
+        width: 100%;
+        height: 100%;
+
+        key-pressed(event) => {
+            if (root.enabled
+                && (event.text == Key.Space || event.text == Key.Return)) {
+                root.checked = !root.checked;
+                root.toggled(root.checked);
+                accept
+            } else {
+                reject
+            }
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            accessible-role: checkbox;
+            accessible-label: root.text;
+            accessible-checked: root.checked;
+            clicked => {
+                focus-scope.focus();
+                root.checked = !root.checked;
+                root.toggled(root.checked);
+            }
+        }
+    }
+}

@@ -1,0 +1,126 @@
+// ============================================================================
+// Mica 风格按钮 / Mica style button
+//
+// 动效细节 / Motion details:
+//   · hover 只改底色与边框，100ms，让指针扫过时连续跟随；
+//   · 按下时文字下沉 1px，给出物理回馈；
+//   · 焦点环从"细"变"粗"地浮现，而不是简单淡入；
+//   · 禁用态整体淡到 40%，与启用切换平滑过渡；
+//   · 不使用 ripple —— Win11 Fluent 里没有波纹。
+//
+// No ripple: Fluent has none. Press feedback is a 1px text dip, and the focus
+// ring thickens as it fades in rather than simply appearing.
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaButton inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> primary: false;
+    // 禁用开关（Rectangle 没有内置 enabled，所以显式声明）
+    // Disabled flag (Rectangle has no built-in enabled, so declare it explicitly)
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 32px;
+    min-width: 88px;
+    border-radius: 4px;
+    border-width: 1px;
+
+    opacity: root.enabled ? 1 : 0.4;
+    animate opacity {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+
+    background: root.primary
+        ? (touch.pressed
+            ? MicaTheme.accent.darker(0.12)
+            : (touch.has-hover ? MicaTheme.accent.brighter(0.08) : MicaTheme.accent))
+        : (touch.pressed
+            ? MicaTheme.surface-pressed
+            : (touch.has-hover ? MicaTheme.surface-hover : MicaTheme.surface));
+
+    border-color: root.primary
+        ? transparent
+        : (touch.has-hover ? MicaTheme.border-strong : MicaTheme.border);
+
+    animate background {
+        duration: Motion.fast;
+        easing: Motion.standard;
+    }
+    animate border-color {
+        duration: Motion.fast;
+        easing: Motion.standard;
+    }
+
+    // 焦点环：内缩 1px，随聚焦由 0 加粗到 2px
+    // Focus ring: inset by 1px, thickening from 0 to 2px as it appears
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        border-radius: 3px;
+        border-color: MicaTheme.focus-ring;
+        border-width: focus-scope.has-focus ? 2px : 0px;
+        opacity: focus-scope.has-focus ? 1 : 0;
+
+        animate opacity {
+            duration: Motion.normal;
+            easing: Motion.standard;
+        }
+        animate border-width {
+            duration: Motion.normal;
+            easing: Motion.lively;
+        }
+    }
+
+    Text {
+        text: root.text;
+        font-size: 13px;
+        color: root.primary ? MicaTheme.accent-foreground : MicaTheme.text-primary;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+
+        // 只改透明度：文字仍然自动撑满父级，按钮宽度由文本固有宽度决定
+        // Opacity only: the Text keeps stretching, so the button width still
+        // follows the intrinsic text width instead of collapsing to min-width
+        opacity: touch.pressed ? 0.85 : 1;
+        animate opacity {
+            duration: Motion.instant;
+            easing: Motion.standard;
+        }
+        animate color {
+            duration: Motion.fast;
+            easing: Motion.standard;
+        }
+    }
+
+    focus-scope := FocusScope {
+        width: 100%;
+        height: 100%;
+
+        key-pressed(event) => {
+            if (!root.enabled) {
+                reject
+            } else if (event.text == Key.Space || event.text == Key.Return) {
+                root.clicked();
+                accept
+            } else {
+                reject
+            }
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            accessible-role: button;
+            accessible-label: root.text;
+            clicked => {
+                focus-scope.focus();
+                root.clicked();
+            }
+        }
+    }
+}

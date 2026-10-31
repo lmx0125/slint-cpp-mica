@@ -1,0 +1,30 @@
+# CMake 构建产物 / CMake build output
+build/
+out/
+cmake-build-*/
+
+# 自动下载/解压的 Slint SDK（体积大，不入库；CMake 会自动重新下载）
+# Auto-downloaded Slint SDK (large; CMake re-downloads it on demand)
+third_party/slint-sdk/
+build/_deps/
+
+# MSVC / IDE
+.vs/
+*.user
+*.suo
+*.VC.db
+.vscode/
+.idea/
+
+# 生成文件
+*.obj
+*.ilk
+*.pdb
+*.exe
+*.dll
+*.lib
+*.exp
+
+# 额外的构建目录与日志
+build-debug/
+build.log

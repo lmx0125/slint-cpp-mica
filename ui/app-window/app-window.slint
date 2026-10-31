@@ -1,0 +1,410 @@
+import {
+    Button,
+    CheckBox,
+    ComboBox,
+    LineEdit,
+    Slider,
+    SpinBox,
+    Switch,
+    TextEdit,
+    VerticalBox,
+    HorizontalBox,
+    GridBox,
+    ScrollView,
+    TabWidget,
+    StandardListView,
+    StandardTableView,
+    GroupBox,
+} from "std-widgets.slint";
+
+// 引入系统调色板单例 / Import system palette singleton
+import { Palette } from "std-widgets.slint";
+// 1. 导入无边框标题栏与控件组件 / 1. Import borderless titlebar and controls
+import { Titlebar, WindowControls } from "./titlebar.slint";
+
+// 动效 token 与自绘动画控件 / Motion tokens and self-drawn animated widgets
+import { Motion, MicaTheme } from "../common/motion.slint";
+import { MicaButton } from "../widgets/MicaButton.slint";
+import { MicaSwitch } from "../widgets/MicaSwitch.slint";
+import { MicaExpander } from "../widgets/MicaExpander.slint";
+import { MicaTabBar, MicaTabView, MicaTabPage } from "../widgets/MicaTabBar.slint";
+
+// 2. 导出 WindowControls 使得 Rust 端可以访问 / 2. Export WindowControls for Rust-side access
+export {
+    WindowControls,
+}
+
+// 导入并导出两种终端窗口组件，供 Rust 端在 slint::include_modules!() 中生成结构体
+// Import and export both terminal window components for Rust code generation
+import {
+    CustomTerminalWindow,
+} from "../custom-terminal-window/custom-terminal-window.slint";
+import {
+    NativeTerminalWindow,
+} from "../native-terminal-window/native-terminal-window.slint";
+export { CustomTerminalWindow, NativeTerminalWindow }
+
+export component AppWindow inherits Window {
+    // 导出初始宽高属性 / Export initial width and height properties
+    in-out property <length> init-width: 1200px;
+    in-out property <length> init-height: 700px;
+
+    // 绑定首选尺寸 / Bind preferred window dimensions
+    preferred-width: init-width;
+    preferred-height: init-height;
+
+    // Mica 状态控制（由 Rust 侧注入） / Mica active status (controlled by Rust)
+    in-out property <bool> is-mica-active: false;
+
+    // Mica 成功开启则透明，否则使用系统 Palette.background
+    // Transparent if Mica active, fallback to Palette.background if inactive
+    background: self.is-mica-active ? transparent : Palette.background;
+
+    // 窗口标题（保持原样供 CBT Hook 精确匹配）
+    // Window title (kept as-is for CBT Hook title matching)
+    title: "Slint标准组件全家桶";
+
+    // 开启无边框，限制最小尺寸 / Enable borderless, limit minimum dimensions
+    no-frame: true;
+    min-width: 600px;
+    min-height: 500px;
+
+    // 窗口间通信回调 / Window inter-communication callbacks
+    callback open-custom-terminal-window();
+    callback open-native-terminal-window();
+
+    // 状态数据管理 / State data management
+    in-out property <string> input-text: "";
+    in-out property <float> slider-val: 50.0;
+    in-out property <int> spin-val: 10;
+    in-out property <bool> switch-status: false;
+
+    // 动效演示页状态 / Motion demo page state
+    private property <bool> motion-switch-on: true;
+    private property <bool> motion-switch-off: false;
+    private property <int> motion-tab: 0;
+
+    // 列表数据模型 / List view data model
+    private property <[StandardListViewItem]> list-data: [
+        { text: "选项 A / Option A" },
+        { text: "选项 B / Option B" },
+        { text: "选项 C / Option C" }
+    ];
+
+    // 表格数据模型 / Table view data model
+    private property <[[StandardListViewItem]]> table-rows: [
+        [{ text: "1" }, { text: "张三 (Alice)" }, { text: "在线 (Online)" }],
+        [{ text: "2" }, { text: "李四 (Bob)" }, { text: "离线 (Offline)" }],
+        [{ text: "3" }, { text: "王五 (Charlie)" }, { text: "忙碌 (Busy)" }]
+    ];
+
+    // 主布局 / Main layout
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // 自定义标题栏 / Custom titlebar
+        Titlebar {
+            title: root.title;
+        }
+
+        // 选项卡容器 / Tab widget container
+        TabWidget {
+            // --- 第一个标签页：基础控件 / Tab 1: Basic Controls ---
+            Tab {
+                title: "基础控件 / Basic Controls";
+                ScrollView {
+                    VerticalBox {
+                        padding: 20px;
+                        spacing: 20px;
+                        alignment: start;
+
+                        // 1. GroupBox - 按钮与开关 / Buttons & Toggles
+                        GroupBox {
+                            title: "按钮与开关 / Buttons & Toggles";
+                            HorizontalBox {
+                                spacing: 15px;
+                                alignment: start;
+
+                                Button {
+                                    text: "打开自绘终端窗口 / Custom Terminal";
+                                    primary: true;
+                                    clicked => { root.open-custom-terminal-window(); }
+                                }
+
+                                Button {
+                                    text: "打开原生终端窗口 / Native Terminal";
+                                    primary: true;
+                                    clicked => { root.open-native-terminal-window(); }
+                                }
+
+                                CheckBox {
+                                    text: "同意条款 / Agree to Terms";
+                                    checked: true;
+                                }
+
+                                Switch {
+                                    text: "启用通知 / Enable Notifications";
+                                    checked <=> switch-status;
+                                }
+                            }
+                        }
+
+                        // 2. GroupBox - 文本输入 / Text Inputs
+                        GroupBox {
+                            title: "文本输入 / Text Inputs";
+                            VerticalBox {
+                                spacing: 12px;
+                                HorizontalBox {
+                                    Text {
+                                        text: "单行输入 / Single-line: ";
+                                        vertical-alignment: center;
+                                    }
+
+                                    LineEdit {
+                                        placeholder-text: "请输入文字... / Enter text...";
+                                        text <=> input-text;
+                                    }
+                                }
+
+                                HorizontalBox {
+                                    Text {
+                                        text: "多行输入 / Multi-line: ";
+                                        vertical-alignment: top;
+                                    }
+
+                                    TextEdit {
+                                        height: 80px;
+                                        text: "这是多行文本组件的默认内容...\n支持换行。\nThis is default multi-line text content...";
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. GroupBox - 数值与选择 / Selectors & Spinners
+                        GroupBox {
+                            title: "数值与选择 / Selectors & Spinners";
+                            GridBox {
+                                spacing: 15px;
+                                Row {
+                                    Text {
+                                        text: "滑块调节 / Slider: ";
+                                        vertical-alignment: center;
+                                    }
+
+                                    Slider {
+                                        minimum: 0.0;
+                                        maximum: 100.0;
+                                        value <=> slider-val;
+                                    }
+
+                                    Text {
+                                        text: "\{Math.round(slider-val)}";
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                Row {
+                                    Text {
+                                        text: "数字微调 / SpinBox: ";
+                                        vertical-alignment: center;
+                                    }
+
+                                    SpinBox {
+                                        minimum: 0;
+                                        maximum: 100;
+                                        value <=> spin-val;
+                                    }
+
+                                    Rectangle { }
+                                }
+
+                                Row {
+                                    Text {
+                                        text: "下拉选择 / ComboBox: ";
+                                        vertical-alignment: center;
+                                    }
+
+                                    ComboBox {
+                                        model: ["红茶 / Black Tea", "绿茶 / Green Tea", "咖啡 / Coffee", "果汁 / Juice"];
+                                        current-value: "绿茶 / Green Tea";
+                                    }
+
+                                    Rectangle { }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- 第二个标签页：高级视图 / Tab 2: Advanced Views ---
+            Tab {
+                title: "高级视图 / Advanced Views";
+                HorizontalBox {
+                    padding: 20px;
+                    spacing: 20px;
+
+                    VerticalBox {
+                        Text {
+                            text: "标准列表 / StandardListView";
+                            font-weight: 700;
+                        }
+
+                        StandardListView {
+                            model: list-data;
+                        }
+                    }
+
+                    VerticalBox {
+                        Text {
+                            text: "标准表格 / StandardTableView";
+                            font-weight: 700;
+                        }
+
+                        StandardTableView {
+                            columns: [
+                                { title: "ID", width: 50px },
+                                { title: "姓名 / Name", width: 140px },
+                                { title: "状态 / Status", width: 120px }
+                            ];
+                            rows: table-rows;
+                        }
+                    }
+                }
+            }
+
+            // --- 第三个标签页：动效 / Tab 3: Motion ---
+            // 集中展示自绘控件的动画；前两页仍然原样演示 std-widgets，
+            // 因此"标准组件全家桶"的定位不受影响。
+            // Showcases the animated self-drawn widgets; the first two tabs keep
+            // demoing std-widgets unchanged, so the std-widgets showcase remains.
+            Tab {
+                title: "动效 / Motion";
+                ScrollView {
+                    VerticalBox {
+                        padding: 20px;
+                        spacing: 16px;
+                        alignment: start;
+
+                        Text {
+                            text: "以下控件为自绘实现，动画统一取 60 / 100 / 150 / 200ms，缓动 cubic-bezier(0, 0, 0.58, 1)。";
+                            font-size: 12px;
+                            color: MicaTheme.text-secondary;
+                            wrap: word-wrap;
+                        }
+
+                        // 按钮状态 / Button states
+                        MicaExpander {
+                            title: "按钮状态 / Button States — 颜色过渡与焦点环";
+                            expanded: true;
+                            content-height: 56px;
+
+                            HorizontalBox {
+                                spacing: 12px;
+                                alignment: start;
+
+                                MicaButton {
+                                    text: "主要按钮 / Primary";
+                                    primary: true;
+                                }
+
+                                MicaButton {
+                                    text: "次要按钮 / Secondary";
+                                }
+
+                                MicaButton {
+                                    text: "禁用 / Disabled";
+                                    enabled: false;
+                                }
+                            }
+                        }
+
+                        // 开关 / Switch
+                        MicaExpander {
+                            title: "开关 / Switch — 滑块滑动与按压缩放";
+                            expanded: true;
+                            content-height: 48px;
+
+                            HorizontalBox {
+                                spacing: 24px;
+                                alignment: start;
+
+                                MicaSwitch {
+                                    text: "启用通知 / Notifications";
+                                    checked <=> root.motion-switch-on;
+                                }
+
+                                MicaSwitch {
+                                    text: "自动更新 / Auto update";
+                                    checked <=> root.motion-switch-off;
+                                }
+                            }
+                        }
+
+                        // 标签栏 / Tab bar
+                        MicaExpander {
+                            title: "标签栏 / Tab Bar — 指示条滑动与内容交叉淡入";
+                            expanded: true;
+                            content-height: 148px;
+
+                            MicaTabBar {
+                                tabs: ["第一页 / One", "第二页 / Two", "第三页 / Three"];
+                                current <=> root.motion-tab;
+                            }
+
+                            Rectangle {
+                                height: 72px;
+
+                                MicaTabView {
+                                    width: 100%;
+                                    height: 100%;
+                                    current: root.motion-tab;
+
+                                    MicaTabPage {
+                                        index: 0;
+                                        current: root.motion-tab;
+                                        width: 100%;
+                                        height: 100%;
+
+                                        Text {
+                                            text: "第一页内容 / First page";
+                                            color: MicaTheme.text-primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    MicaTabPage {
+                                        index: 1;
+                                        current: root.motion-tab;
+                                        width: 100%;
+                                        height: 100%;
+
+                                        Text {
+                                            text: "第二页内容 / Second page";
+                                            color: MicaTheme.text-primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    MicaTabPage {
+                                        index: 2;
+                                        current: root.motion-tab;
+                                        width: 100%;
+                                        height: 100%;
+
+                                        Text {
+                                            text: "第三页内容 / Third page";
+                                            color: MicaTheme.text-primary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,95 @@
+// ============================================================================
+// 终端日志面板 / Terminal log panel
+//
+// 动效细节 / Motion details:
+//   · 窗口出现时整块面板淡入并上滑 8px；
+//   · 每条日志追加时单独淡入并上移 4px（为后续真实数据预留）；
+//   · 顶部 / 底部渐隐遮罩，让滚动内容进出时有柔和的边缘。
+// ============================================================================
+import { ScrollView } from "std-widgets.slint";
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaLogView inherits Rectangle {
+    in property <[string]> lines: [];
+
+    private property <bool> entered: false;
+
+    // 等首帧之后再淡入，否则窗口显示时动画已经结束
+    // Wait for the first frame before fading in, otherwise the animation has
+    // already finished by the time the window becomes visible
+    entrance := Timer {
+        interval: 16ms;
+        running: true;
+        triggered => {
+            root.entered = true;
+            self.running = false;
+        }
+    }
+
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: MicaTheme.log-border;
+    background: MicaTheme.log-surface;
+
+    ScrollView {
+        width: 100%;
+        height: 100%;
+        y: root.entered ? 0px : 8px;
+
+        animate y {
+            duration: Motion.slow;
+            easing: Motion.lively;
+        }
+
+        VerticalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            spacing: 4px;
+
+            for line in root.lines: Text {
+                text: line;
+                font-size: 12px;
+                font-family: "Consolas";
+                color: MicaTheme.text-primary;
+                wrap: word-wrap;
+
+                // 新行淡入（布局会接管 y，所以只做透明度） / Lines fade in;
+                // the layout owns y, so opacity is the only animatable channel here
+                opacity: 0;
+                animate opacity {
+                    duration: Motion.normal;
+                    easing: Motion.standard;
+                }
+                init => {
+                    self.opacity = 1;
+                }
+            }
+        }
+    }
+
+    // 顶部渐隐遮罩 / Top fade mask
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width - 12px;
+        height: 14px;
+        background: @linear-gradient(
+            180deg,
+            MicaTheme.log-surface 0%,
+            MicaTheme.log-surface.with-alpha(0) 100%);
+    }
+
+    // 底部渐隐遮罩 / Bottom fade mask
+    Rectangle {
+        x: 0;
+        y: parent.height - 14px;
+        width: parent.width - 12px;
+        height: 14px;
+        background: @linear-gradient(
+            0deg,
+            MicaTheme.log-surface 0%,
+            MicaTheme.log-surface.with-alpha(0) 100%);
+    }
+}

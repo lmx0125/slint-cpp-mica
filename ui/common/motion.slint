@@ -1,0 +1,80 @@
+// ============================================================================
+// 统一的动效与配色 token / Shared motion and color tokens
+//
+// 所有新增动画都应从这里取时长与缓动曲线，避免出现 60/80/150ms 混用。
+// Every new animation should take its duration and easing from here so the
+// rhythm stays consistent instead of mixing 60/80/150ms ad hoc.
+// ============================================================================
+import { Palette } from "std-widgets.slint";
+
+// Win11 Fluent 动效节奏 / Win11 Fluent motion rhythm
+export global Motion {
+    // 60ms  按压反馈（标题栏按钮、文字下沉）
+    // 60ms  press feedback (titlebar buttons, text dip)
+    out property <duration> instant: 60ms;
+    // 100ms hover、文本与边框颜色
+    // 100ms hover, text and border color
+    out property <duration> fast: 100ms;
+    // 150ms 状态切换、焦点环、图标交叉淡化
+    // 150ms state change, focus ring, icon cross-fade
+    out property <duration> normal: 150ms;
+    // 200ms 展开收起、面板入场
+    // 200ms expand/collapse, panel entrance
+    out property <duration> slow: 200ms;
+
+    // 序列错峰：用于给同组元素制造先后层次
+    // Stagger used to give a group of elements a sense of order
+    out property <duration> stagger: 25ms;
+
+    // Win11 Fluent 标准减速曲线 / Win11 Fluent standard decelerate curve
+    out property <easing> standard: cubic-bezier(0, 0, 0.58, 1);
+    // 退出与收起使用加速曲线 / Accelerate curve for exit and collapse
+    out property <easing> exit: cubic-bezier(0.42, 0, 1, 1);
+    // 带有轻微过冲的曲线，只用于空间位移（滑块、指示条），让动作更有弹性
+    // Slight overshoot, only for spatial moves (thumb, indicator) so they feel springy
+    out property <easing> lively: cubic-bezier(0.2, 0.9, 0.2, 1.06);
+}
+
+// 语义配色：把原本散落在各文件里的深浅色三元表达式集中到一处。
+// Semantic colors: gathers the dark/light ternaries previously scattered across files.
+export global MicaTheme {
+    // 文本 / Text
+    out property <color> text-primary:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff : #191919;
+    out property <color> text-secondary:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff99 : #00000099;
+    out property <color> text-inactive:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff66 : #00000066;
+
+    // 表面 / Surfaces
+    out property <color> surface:
+        Palette.color-scheme == ColorScheme.dark ? #2d2d2d : #ffffff;
+    out property <color> surface-hover:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff0d : #0000000a;
+    out property <color> surface-pressed:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff15 : #00000018;
+
+    // 边框 / Borders
+    out property <color> border: Palette.border;
+    out property <color> border-strong:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff2e : #00000024;
+
+    // 强调色 / Accent
+    out property <color> accent: Palette.accent-background;
+    out property <color> accent-foreground: Palette.accent-foreground;
+    out property <color> focus-ring: Palette.accent-background;
+
+    // 标题栏按钮 / Titlebar buttons
+    out property <color> titlebar-hover:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff1a : #0000000f;
+    out property <color> titlebar-pressed:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff0d : #00000008;
+    out property <color> close-hover: #c42b1c;
+    out property <color> close-pressed: #c42b1cc8;
+
+    // 终端日志面板 / Terminal log panel
+    out property <color> log-surface:
+        Palette.color-scheme == ColorScheme.dark ? #1e1e1e : #f8f9fa;
+    out property <color> log-border:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff18 : #00000012;
+}

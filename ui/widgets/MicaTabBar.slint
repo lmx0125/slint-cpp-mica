@@ -1,0 +1,131 @@
+// ============================================================================
+// 自绘标签栏 + 内容区 / Self-drawn tab bar and content area
+//
+// 动效细节 / Motion details:
+//   · 选中指示条在等宽标签间滑动，使用带轻微过冲的 Motion.lively；
+//   · 悬停未选中标签时，先浮现一条更淡的"预览条"，暗示点击结果；
+//   · 标签文字颜色切换带 25ms 错峰，看起来更连贯；
+//   · 页面切换时内容交叉淡入并上滑 8px，淡出结束后隐藏。
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaTabBar inherits Rectangle {
+    in property <[string]> tabs: [];
+    in-out property <int> current: 0;
+    callback selected(int);
+
+    height: 40px;
+    background: transparent;
+
+    private property <int> active:
+        Math.max(0, Math.min(root.current, root.tabs.length - 1));
+    private property <length> tab-width:
+        root.width / max(1, root.tabs.length);
+
+    // 底部分隔线 / Bottom divider
+    Rectangle {
+        x: 0;
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: MicaTheme.border;
+    }
+
+    // 选中指示条：在等宽标签之间滑动 / Selection indicator sliding between tabs
+    Rectangle {
+        x: root.active * root.tab-width;
+        y: parent.height - 2px;
+        width: root.tab-width;
+        height: 2px;
+        background: MicaTheme.accent;
+
+        animate x, width {
+            duration: Motion.normal;
+            easing: Motion.lively;
+        }
+    }
+
+    for i in root.tabs.length: Rectangle {
+        x: i * root.tab-width;
+        width: root.tab-width;
+        height: parent.height;
+        background: tab-touch.pressed
+            ? MicaTheme.surface-pressed
+            : (tab-touch.has-hover ? MicaTheme.surface-hover : transparent);
+
+        animate background {
+            duration: Motion.fast;
+            easing: Motion.standard;
+        }
+
+        tab-touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.current = i;
+                root.selected(i);
+            }
+        }
+
+        Text {
+            text: root.tabs[i];
+            font-size: 12px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            overflow: elide;
+            color: i == root.active ? MicaTheme.text-primary : MicaTheme.text-secondary;
+
+            animate color {
+                duration: Motion.fast;
+                delay: Motion.stagger;
+                easing: Motion.standard;
+            }
+        }
+
+        // 悬停预览条：未选中时提示"点下去会滑到这里"
+        // Hover preview bar hinting where the indicator would move
+        Rectangle {
+            x: 10px;
+            y: parent.height - 2px;
+            width: max(0px, parent.width - 20px);
+            height: 2px;
+            border-radius: 1px;
+            background: MicaTheme.accent.with-alpha(0.4);
+            opacity: (tab-touch.has-hover && i != root.active) ? 1 : 0;
+
+            animate opacity {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+        }
+    }
+}
+
+// 内容容器：负责裁剪与堆叠 / Content container responsible for clipping
+export component MicaTabView inherits Rectangle {
+    in property <int> current: 0;
+    clip: true;
+    @children
+}
+
+// 单个页面：非当前页淡出并下移后隐藏 / Single page: fades out and slides down
+export component MicaTabPage inherits Rectangle {
+    in property <int> index: 0;
+    in property <int> current: 0;
+
+    // 尺寸由调用方给出（组件根节点无法解析 100% 相对长度）
+    // Size is supplied by the caller: a component root cannot resolve 100%
+    opacity: root.current == root.index ? 1 : 0;
+    y: root.current == root.index ? 0px : 8px;
+    visible: root.current == root.index || self.opacity > 0.001;
+
+    animate opacity {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+    animate y {
+        duration: Motion.normal;
+        easing: Motion.lively;
+    }
+
+    @children
+}

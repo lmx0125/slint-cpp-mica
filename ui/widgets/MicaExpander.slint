@@ -1,0 +1,170 @@
+// ============================================================================
+// 可折叠分组 / Collapsible group
+//
+// 动效细节 / Motion details:
+//   · 根节点 height 动画负责展开与收起，父布局随之平滑重排；
+//   · 内容同时做 8px 上滑 + 淡入，避免"整块突然出现"；
+//   · 箭头两个常驻 Path 交叉淡化，并带 1px 位移；
+//   · 表头分隔线只在展开时淡入；
+//   · 表头 hover / pressed 都有底色反馈。
+//
+// The root animates height so the parent layout re-flows; the body additionally
+// slides up 8px while fading in, the chevron cross-fades with a 1px slide, and
+// the header divider only appears when expanded.
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaExpander inherits Rectangle {
+    in property <string> title: "";
+    in-out property <bool> expanded: true;
+    // 展开后 body 区域的目标高度（含内边距），由调用方给出
+    // Target height of the body once expanded, padding included; supplied by caller
+    in property <length> content-height: 0px;
+    callback toggled(bool);
+
+    private property <length> header-height: 40px;
+
+    height: root.header-height + (root.expanded ? root.content-height : 0px);
+    clip: true;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: MicaTheme.border;
+    background: MicaTheme.surface;
+
+    animate height {
+        duration: Motion.slow;
+        easing: Motion.standard;
+    }
+
+    VerticalLayout {
+        spacing: 0px;
+
+        header := Rectangle {
+            height: root.header-height;
+            background: header-touch.pressed
+                ? MicaTheme.surface-pressed
+                : (header-touch.has-hover ? MicaTheme.surface-hover : transparent);
+
+            animate background {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+
+            header-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.expanded = !root.expanded;
+                    root.toggled(root.expanded);
+                }
+            }
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 8px;
+
+                Text {
+                    text: root.title;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: MicaTheme.text-primary;
+                    vertical-alignment: center;
+                    overflow: elide;
+
+                    opacity: header-touch.has-hover ? 1 : 0.92;
+                    animate opacity {
+                        duration: Motion.fast;
+                        easing: Motion.standard;
+                    }
+                }
+
+                // 伸缩占位，把箭头推到右侧 / Spacer pushing the chevron to the right
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+
+                // 箭头容器：两种状态常驻，用透明度交叉切换
+                // Chevron container: both states stay alive and cross-fade
+                Rectangle {
+                    width: 10px;
+                    height: root.header-height;
+
+                    chevron-right := Path {
+                        x: 1px;
+                        y: (parent.height - self.height) / 2;
+                        width: 8px;
+                        height: 8px;
+                        stroke: MicaTheme.text-secondary;
+                        stroke-width: 1.4px;
+                        opacity: root.expanded ? 0 : 1;
+                        animate opacity {
+                            duration: Motion.normal;
+                            easing: Motion.standard;
+                        }
+
+                        MoveTo { x: 1; y: 0; }
+                        LineTo { x: 7; y: 4; }
+                        LineTo { x: 1; y: 8; }
+                    }
+
+                    chevron-down := Path {
+                        x: 1px;
+                        y: (parent.height - self.height) / 2 + (root.expanded ? 0px : -1px);
+                        width: 8px;
+                        height: 8px;
+                        stroke: MicaTheme.text-secondary;
+                        stroke-width: 1.4px;
+                        opacity: root.expanded ? 1 : 0;
+                        animate opacity {
+                            duration: Motion.normal;
+                            easing: Motion.standard;
+                        }
+
+                        MoveTo { x: 0; y: 1; }
+                        LineTo { x: 4; y: 7; }
+                        LineTo { x: 8; y: 1; }
+                    }
+                }
+            }
+
+            // 分隔线：只在展开时出现 / Divider, visible only when expanded
+            Rectangle {
+                x: 0;
+                y: parent.height - 1px;
+                width: parent.width;
+                height: 1px;
+                background: MicaTheme.border;
+                opacity: root.expanded ? 1 : 0;
+
+                animate opacity {
+                    duration: Motion.normal;
+                    easing: Motion.standard;
+                }
+            }
+        }
+
+        body := Rectangle {
+            height: max(0px, root.height - root.header-height);
+            clip: true;
+            opacity: root.expanded ? 1 : 0;
+
+            animate opacity {
+                duration: Motion.normal;
+                easing: Motion.standard;
+            }
+
+            VerticalLayout {
+                y: root.expanded ? 0px : -8px;
+                padding: 12px;
+                spacing: 12px;
+
+                animate y {
+                    duration: Motion.slow;
+                    easing: Motion.lively;
+                }
+
+                @children
+            }
+        }
+    }
+}
