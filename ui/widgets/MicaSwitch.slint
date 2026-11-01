@@ -1,14 +1,12 @@
 // ============================================================================
-// Mica 风格开关 / Mica style toggle switch
+// Mica 风格灵动开关 / Mica Fluent Lively Toggle Switch
 //
 // 动效细节 / Motion details:
-//   · 滑块位移使用带轻微过冲的 Motion.lively，切换时更有弹性；
-//   · 悬停时轨道外浮现一圈很淡的光晕，按下时光晕扩大加深；
-//   · 按下时滑块同步放大，松手回落；
-//   · 焦点环随聚焦由 0 加粗到 2px。
-//
-// No scale property exists in Slint, so the thumb grows via width/height while
-// the track keeps a fixed size, which avoids layout jitter.
+//   · 按压时滑块沿移动方向水平拉伸形变为胶囊（18px 宽 × 14px 高），释放时弹射复原；
+//   · 滑块位移使用带轻微过冲的 Motion.lively (cubic-bezier(0.2, 0.9, 0.2, 1.06))，切换时极具弹性；
+//   · 悬停时轨道外浮现一圈柔光光晕，按下时光晕向外扩张加深；
+//   · 轨道背景色与边框色平滑渐变，开启动态填充主题高光；
+//   · 严格遵循 Win11 规范：左侧滑块轨道 + 右侧语义标签，全局手型光标与焦点环贴合。
 // ============================================================================
 import { Motion, MicaTheme } from "../common/motion.slint";
 
@@ -18,51 +16,49 @@ export component MicaSwitch inherits Rectangle {
     in property <bool> enabled: true;
     callback toggled(bool);
 
-    height: 24px;
-    opacity: root.enabled ? 1 : 0.4;
-
+    height: 26px;
+    horizontal-stretch: 0;
+    opacity: root.enabled ? 1.0 : 0.4;
     animate opacity {
         duration: Motion.normal;
         easing: Motion.standard;
     }
 
     HorizontalLayout {
-        spacing: 8px;
         alignment: start;
-
-        Text {
-            text: root.text;
-            font-size: 13px;
-            color: MicaTheme.text-primary;
-            vertical-alignment: center;
-            overflow: elide;
-        }
+        spacing: 10px;
 
         track := Rectangle {
-            width: 40px;
-            height: 20px;
-            border-radius: 10px;
+            width: 44px;
+            height: 22px;
+            border-radius: 11px;
+            border-width: 1px;
+            border-color: root.checked ?
+                (touch.pressed ? MicaTheme.accent.darker(0.12) : MicaTheme.accent) :
+                (touch.has-hover ? MicaTheme.text-secondary : MicaTheme.border-strong);
+            background: root.checked ?
+                (touch.pressed ? MicaTheme.accent.darker(0.08) : (touch.has-hover ? MicaTheme.accent.brighter(0.08) : MicaTheme.accent)) :
+                (touch.pressed ? MicaTheme.surface-pressed : (touch.has-hover ? MicaTheme.surface-hover : MicaTheme.surface-hover.with-alpha(0.3)));
 
-            background: root.checked ? MicaTheme.accent : MicaTheme.border-strong;
-            animate background {
+            animate background, border-color {
                 duration: Motion.fast;
                 easing: Motion.standard;
             }
 
-            // 光晕：悬停时淡入，按下时向外扩张并加深
-            // Halo: fades in on hover and expands/darkens while pressed
-            Rectangle {
-                x: touch.pressed ? -6px : -3px;
-                y: touch.pressed ? -6px : -3px;
-                width: parent.width - (self.x * 2);
-                height: parent.height - (self.y * 2);
-                border-radius: 20px;
-                background: MicaTheme.accent.with-alpha(
-                    touch.pressed ? 0.22 : (touch.has-hover ? 0.10 : 0));
+            // 外圈柔光光晕：悬停时轻微弥散，按下时进一步扩张深邃
+            halo := Rectangle {
+                x: touch.pressed ? -5px : (touch.has-hover ? -3px : 0px);
+                y: touch.pressed ? -5px : (touch.has-hover ? -3px : 0px);
+                width: parent.width - self.x * 2;
+                height: parent.height - self.y * 2;
+                border-radius: parent.border-radius + 4px;
+                background: (root.checked ? MicaTheme.accent : MicaTheme.text-primary).with-alpha(
+                    touch.pressed ? 0.24 : (touch.has-hover ? 0.12 : 0.0)
+                );
 
-                animate x, y {
+                animate x, y, width, height, border-radius {
                     duration: Motion.fast;
-                    easing: Motion.lively;
+                    easing: Motion.standard;
                 }
                 animate background {
                     duration: Motion.fast;
@@ -70,49 +66,58 @@ export component MicaSwitch inherits Rectangle {
                 }
             }
 
-            // 焦点环：紧贴轨道外沿，由细到粗浮现
-            // Focus ring: hugs the track and thickens from 0 to 2px
+            // 焦点环：无障碍 Tab 导航时精准高亮
             Rectangle {
-                x: -3px;
-                y: -3px;
-                width: parent.width + 6px;
-                height: parent.height + 6px;
-                border-radius: 13px;
+                x: -4px;
+                y: -4px;
+                width: parent.width + 8px;
+                height: parent.height + 8px;
+                border-radius: parent.border-radius + 4px;
                 border-color: MicaTheme.focus-ring;
                 border-width: focus-scope.has-focus ? 2px : 0px;
-                opacity: focus-scope.has-focus ? 1 : 0;
+                opacity: focus-scope.has-focus ? 1.0 : 0.0;
 
-                animate opacity {
+                animate opacity, border-width {
                     duration: Motion.normal;
                     easing: Motion.standard;
                 }
-                animate border-width {
-                    duration: Motion.normal;
-                    easing: Motion.lively;
-                }
             }
 
+            // 灵动滑块：按压水平拉伸胶囊形变 + 切换带弹性过冲位移
             thumb := Rectangle {
-                // 按下时滑块略微变大，模拟 Win11 的物理回馈
-                // The thumb grows slightly while pressed, mirroring Win11 physics
-                width: touch.pressed ? 16px : 14px;
-                height: touch.pressed ? 16px : 14px;
+                width: touch.pressed ? 18px : (touch.has-hover ? 15px : 14px);
+                height: touch.pressed ? 14px : (touch.has-hover ? 15px : 14px);
                 border-radius: 7px;
-                background: #ffffff;
+                background: root.checked ? #ffffff : (touch.has-hover ? #ffffff : #d0d0d0);
 
-                // 位移带过冲，尺寸变化不带，避免视觉抖动
-                // Travel overshoots slightly; the size change does not, to avoid jitter
-                x: root.checked ? track.width - self.width - 2px : 2px;
+                x: root.checked ? (track.width - self.width - 4px) : 4px;
                 y: (track.height - self.height) / 2;
 
                 animate x {
-                    duration: Motion.normal;
+                    duration: Motion.slow;
                     easing: Motion.lively;
                 }
                 animate width, height {
                     duration: Motion.fast;
                     easing: Motion.standard;
                 }
+                animate background {
+                    duration: Motion.fast;
+                    easing: Motion.standard;
+                }
+            }
+        }
+
+        if root.text != "": Text {
+            text: root.text;
+            font-size: 13px;
+            color: touch.has-hover ? MicaTheme.text-primary.brighter(0.12) : MicaTheme.text-primary;
+            vertical-alignment: center;
+            overflow: elide;
+
+            animate color {
+                duration: Motion.fast;
+                easing: Motion.standard;
             }
         }
     }
@@ -122,22 +127,17 @@ export component MicaSwitch inherits Rectangle {
         height: 100%;
 
         key-pressed(event) => {
-            if (root.enabled
-                && (event.text == Key.Space || event.text == Key.Return)) {
+            if (root.enabled && (event.text == Key.Space || event.text == Key.Return)) {
                 root.checked = !root.checked;
                 root.toggled(root.checked);
-                accept
-            } else {
-                reject
+                return accept;
             }
+            return reject;
         }
 
         touch := TouchArea {
             enabled: root.enabled;
             mouse-cursor: pointer;
-            accessible-role: checkbox;
-            accessible-label: root.text;
-            accessible-checked: root.checked;
             clicked => {
                 focus-scope.focus();
                 root.checked = !root.checked;

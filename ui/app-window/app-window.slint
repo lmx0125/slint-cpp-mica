@@ -325,17 +325,17 @@ export component AppWindow inherits Window {
                                         spacing: 16px;
                                         alignment: start;
 
-                                        Switch {
+                                        MicaSwitch {
                                             text: "通知推送 / Alerts";
                                             checked <=> root.switch-status;
                                         }
 
-                                        Switch {
+                                        MicaSwitch {
                                             text: "模拟加载 / Simulate Task";
                                             checked <=> root.switch-loading;
                                         }
 
-                                        Switch {
+                                        MicaSwitch {
                                             text: "锁定开关 / Disabled";
                                             enabled: false;
                                             checked: true;
