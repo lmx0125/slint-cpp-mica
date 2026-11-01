@@ -23,6 +23,18 @@ export component NativeTerminalWindow inherits Window {
     // Titlebar active state (driven by WM_ACTIVATE on the C++ side for the inactive fade)
     in-out property <bool> titlebar-is-active: true;
 
+    // 复制成功短暂反馈状态
+    in-out property <bool> copy-success: false;
+
+    copy-timer := Timer {
+        interval: 1600ms;
+        running: false;
+        triggered => {
+            root.copy-success = false;
+            self.running = false;
+        }
+    }
+
     // 窗口标题 / Window title
     title: "原生终端日志 (Console Output)";
     no-frame: false;
@@ -70,6 +82,13 @@ export component NativeTerminalWindow inherits Window {
                 spacing: 12px;
                 vertical-stretch: 1;
 
+                // 失去焦点时内容平滑微变淡 / Gently dim the content when inactive
+                opacity: root.titlebar-is-active ? 1.0 : 0.88;
+                animate opacity {
+                    duration: Motion.normal;
+                    easing: Motion.standard;
+                }
+
                 // 终端日志列表面板（带入场淡入）/ Terminal log panel with entrance fade
                 log-box := MicaLogView {
                     lines: root.logs;
@@ -82,18 +101,22 @@ export component NativeTerminalWindow inherits Window {
                     alignment: end;
                     spacing: 8px;
 
-                    // 复制日志按钮 (Secondary 样式 - 使用系统 Palette 调色板)
-                    // Copy log button (Secondary style - uses system Palette)
+                    // 复制日志按钮 (带复制成功平滑反馈动效)
+                    // Copy log button (with smooth copy-success transition)
                     copy-btn := Rectangle {
-                        width: 130px;
+                        width: root.copy-success ? 148px : 130px;
                         height: 36px;
                         border-radius: 4px;
                         border-width: 1px;
-                        border-color: copy-touch.has-hover ? MicaTheme.border-strong : MicaTheme.border;
-                        background: MicaTheme.surface;
+                        border-color: root.copy-success
+                            ? #107c41
+                            : (copy-touch.has-hover ? MicaTheme.border-strong : MicaTheme.border);
+                        background: root.copy-success
+                            ? (Palette.color-scheme == ColorScheme.dark ? #107c4125 : #107c4118)
+                            : MicaTheme.surface;
 
-                        // 悬停时边框加深 / Darken the border on hover
-                        animate border-color {
+                        // 宽度与边框/底色平滑过渡
+                        animate width, border-color, background {
                             duration: Motion.fast;
                             easing: Motion.standard;
                         }
@@ -112,15 +135,20 @@ export component NativeTerminalWindow inherits Window {
 
                         copy-touch := TouchArea {
                             clicked => {
+                                root.copy-success = true;
+                                copy-timer.running = true;
                                 root.copy-log();
                             }
                         }
 
                         Text {
-                            text: "复制日志 / Copy";
+                            text: root.copy-success ? "✓ 已复制到剪贴板" : "复制日志 / Copy";
                             font-size: 12px;
                             font-family: "Microsoft YaHei UI";
-                            color: copy-touch.pressed ? MicaTheme.text-secondary : MicaTheme.text-primary;
+                            font-weight: root.copy-success ? 600 : 400;
+                            color: root.copy-success
+                                ? #107c41
+                                : (copy-touch.pressed ? MicaTheme.text-secondary : MicaTheme.text-primary);
                             horizontal-alignment: center;
                             vertical-alignment: center;
                             width: 100%;

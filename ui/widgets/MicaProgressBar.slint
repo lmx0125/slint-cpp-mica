@@ -1,0 +1,76 @@
+// ============================================================================
+// Win11 Fluent 动效进度条 / Win11 Fluent Mica Progress Bar
+//
+// 动效细节 / Motion details:
+//   · 确定模式（Determinate）：数值更新时带有 150ms Motion.normal 平滑缓动插值；
+//   · 不确定模式（Indeterminate）：流光波浪在轨道上往返掠过（1400ms 连续循环）；
+//   · 激活轨道带有微光高反差渐变与 150ms 透明度淡入淡出。
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaProgressBar inherits Rectangle {
+    in property <float> progress: 0.0;
+    in property <bool> indeterminate: false;
+    in property <bool> enabled: true;
+
+    private property <bool> wave-cycle: false;
+
+    height: 4px;
+    min-width: 140px;
+    border-radius: 2px;
+    background: MicaTheme.border-strong;
+    clip: true;
+    opacity: root.enabled ? 1.0 : 0.4;
+
+    animate opacity {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+
+    indet-timer := Timer {
+        interval: 1400ms;
+        running: root.indeterminate;
+        triggered => {
+            root.wave-cycle = !root.wave-cycle;
+        }
+    }
+
+    // 确定进度填充条
+    determinate-bar := Rectangle {
+        x: 0px;
+        y: 0px;
+        width: root.indeterminate ? 0px : Math.max(0.0, Math.min(1.0, root.progress)) * parent.width;
+        height: 100%;
+        border-radius: 2px;
+        background: MicaTheme.accent;
+
+        animate width {
+            duration: Motion.normal;
+            easing: Motion.standard;
+        }
+
+        // 确定进度微流光高光
+        if !root.indeterminate: Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: 100%;
+            background: @linear-gradient(90deg, transparent 0%, #ffffff30 85%, transparent 100%);
+        }
+    }
+
+    // 不确定流光波浪扫掠条
+    if root.indeterminate: Rectangle {
+        x: root.wave-cycle ? parent.width - self.width : 0px;
+        y: 0px;
+        width: parent.width * 0.4;
+        height: 100%;
+        border-radius: 2px;
+        background: @linear-gradient(90deg, transparent 0%, MicaTheme.accent 30%, MicaTheme.accent.brighter(0.2) 70%, transparent 100%);
+
+        animate x {
+            duration: 1300ms;
+            easing: cubic-bezier(0.4, 0.0, 0.2, 1.0);
+        }
+    }
+}

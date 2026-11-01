@@ -1,0 +1,74 @@
+// ============================================================================
+// Win11 Fluent 独立状态动效徽章 / Win11 Fluent Mica Badge
+//
+// 动效细节 / Motion details:
+//   · 呼吸指示灯在 1000ms 周期内平滑淡入淡出（0.35 ~ 1.0）；
+//   · 语义色彩映射（Success 绿 / Info 蓝 / Warning 橙 / Neutral 灰）；
+//   · 悬停时背景带有 100ms Motion.fast 辉光高亮过渡。
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+import { Palette } from "std-widgets.slint";
+
+export component MicaBadge inherits Rectangle {
+    in property <string> text: "Active";
+    in property <string> variant: "success";
+    in property <bool> pulse: true;
+
+    private property <color> base-color:
+        root.variant == "success" ? #107c41 :
+        (root.variant == "info" ? #0078d4 :
+        (root.variant == "warning" ? #ca5010 :
+        (Palette.color-scheme == ColorScheme.dark ? #ffffff88 : #00000077)));
+
+    height: 20px;
+    border-radius: 10px;
+    background: badge-touch.has-hover
+        ? root.base-color.with-alpha(0.24)
+        : root.base-color.with-alpha(0.14);
+    border-width: 1px;
+    border-color: badge-touch.has-hover
+        ? root.base-color.with-alpha(0.60)
+        : root.base-color.with-alpha(0.35);
+
+    animate background, border-color {
+        duration: Motion.fast;
+        easing: Motion.standard;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 5px;
+        alignment: center;
+
+        // 呼吸圆点
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.base-color;
+                opacity: root.pulse ? 1.0 : 0.35;
+
+                animate opacity {
+                    duration: 600ms;
+                    easing: ease-in-out;
+                }
+            }
+        }
+
+        Text {
+            text: root.text;
+            font-size: 11px;
+            font-weight: 600;
+            color: root.base-color;
+            vertical-alignment: center;
+        }
+    }
+
+    badge-touch := TouchArea {
+        mouse-cursor: default;
+    }
+}

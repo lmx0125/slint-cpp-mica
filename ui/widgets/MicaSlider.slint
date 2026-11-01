@@ -1,0 +1,145 @@
+// ============================================================================
+// Win11 Fluent 动效滑块 / Win11 Fluent Mica Slider
+//
+// 动效细节 / Motion details:
+//   · 悬停时旋钮由 14px 放大至 16px，浮现外圈柔光光晕；
+//   · 按下拖拽时旋钮微扁平化（18px 宽 × 12px 高），模拟 Win11 物理回馈；
+//   · 激活轨道颜色平滑渐变，失焦/禁用态 150ms 平滑降权；
+//   · 焦点环贴合外层，随 Tab 聚焦浮现。
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+
+export component MicaSlider inherits Rectangle {
+    in property <float> minimum: 0.0;
+    in property <float> maximum: 100.0;
+    in-out property <float> value: 50.0;
+    in property <bool> enabled: true;
+    callback changed(float);
+
+    height: 24px;
+    min-width: 140px;
+    opacity: root.enabled ? 1.0 : 0.4;
+    animate opacity {
+        duration: Motion.normal;
+        easing: Motion.standard;
+    }
+
+    private property <float> progress:
+        Math.max(0.0, Math.min(1.0, (root.value - root.minimum) / Math.max(0.001, root.maximum - root.minimum)));
+
+    function update-value(pos-x: length) {
+        if (!root.enabled) { return; }
+        root.value = root.minimum + Math.max(0.0, Math.min(1.0, (pos-x - 8px) / Math.max(1px, root.width - 16px))) * (root.maximum - root.minimum);
+        root.changed(root.value);
+    }
+
+    // 轨道槽区
+    track := Rectangle {
+        x: 8px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - 16px;
+        height: 4px;
+        border-radius: 2px;
+        background: MicaTheme.border-strong;
+
+        // 激活填充部分
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: root.progress * parent.width;
+            height: 100%;
+            border-radius: 2px;
+            background: touch.has-hover ? MicaTheme.accent.brighter(0.06) : MicaTheme.accent;
+            animate background {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+        }
+    }
+
+    // 旋钮及光晕容器（绝对位移跟随进度）
+    thumb-container := Rectangle {
+        x: 8px + root.progress * (root.width - 16px) - self.width / 2;
+        y: (parent.height - self.height) / 2;
+        width: 24px;
+        height: 24px;
+
+        // 悬停/按下光晕
+        halo := Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: touch.pressed ? 24px : (touch.has-hover ? 20px : 0px);
+            height: touch.pressed ? 24px : (touch.has-hover ? 20px : 0px);
+            border-radius: 12px;
+            background: MicaTheme.accent.with-alpha(touch.pressed ? 0.24 : (touch.has-hover ? 0.12 : 0.0));
+
+            animate width, height {
+                duration: Motion.fast;
+                easing: Motion.lively;
+            }
+            animate background {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+        }
+
+        // 焦点环
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: focus-scope.has-focus ? 20px : 0px;
+            height: focus-scope.has-focus ? 20px : 0px;
+            border-radius: 10px;
+            border-color: MicaTheme.focus-ring;
+            border-width: focus-scope.has-focus ? 2px : 0px;
+            opacity: focus-scope.has-focus ? 1.0 : 0.0;
+
+            animate opacity, width, height {
+                duration: Motion.normal;
+                easing: Motion.standard;
+            }
+        }
+
+        // 实体旋钮（Win11 经典悬停放大 + 按下微扁平形变）
+        thumb := Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: touch.pressed ? 18px : (touch.has-hover ? 16px : 14px);
+            height: touch.pressed ? 12px : (touch.has-hover ? 16px : 14px);
+            border-radius: touch.pressed ? 6px : (touch.has-hover ? 8px : 7px);
+            background: #ffffff;
+            border-width: 1px;
+            border-color: MicaTheme.accent;
+
+            animate width, height, border-radius {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+            animate border-color {
+                duration: Motion.fast;
+                easing: Motion.standard;
+            }
+        }
+    }
+
+    focus-scope := FocusScope {
+        width: 100%;
+        height: 100%;
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+
+            moved => {
+                if (self.pressed) {
+                    root.update-value(self.mouse-x);
+                }
+            }
+
+            clicked => {
+                focus-scope.focus();
+                root.update-value(self.mouse-x);
+            }
+        }
+    }
+}

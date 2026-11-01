@@ -33,6 +33,9 @@ import { MicaExpander } from "../widgets/MicaExpander.slint";
 import { MicaTabBar, MicaTabView, MicaTabPage } from "../widgets/MicaTabBar.slint";
 import { MicaLogView } from "../widgets/MicaLogView.slint";
 import { MicaListView, MicaListItemData } from "../widgets/MicaListView.slint";
+import { MicaSlider } from "../widgets/MicaSlider.slint";
+import { MicaProgressBar } from "../widgets/MicaProgressBar.slint";
+import { MicaBadge } from "../widgets/MicaBadge.slint";
 
 // 2. 导出 WindowControls 使得 Rust/C++ 端可以访问 / 2. Export WindowControls for native-side access
 export {
@@ -98,6 +101,8 @@ export component AppWindow inherits Window {
     in-out property <bool> motion-switch-on: true;
     in-out property <bool> motion-switch-off: false;
     in-out property <int> motion-tab: 0;
+    in-out property <float> motion-slider-val: 68.0;
+    in-out property <bool> motion-progress-indet: false;
 
     // Windows 11 DWM 材质与视觉合成状态 / Win11 DWM backdrop & composition states
     in-out property <int> dwm-backdrop-index: 0;
@@ -175,7 +180,10 @@ export component AppWindow inherits Window {
         [{ text: "8" }, { text: "MicaExpander" }, { text: "自绘动效 (Mica)" }, { text: "200ms 折叠 / 交叉淡化" }],
         [{ text: "9" }, { text: "MicaTabBar" }, { text: "自绘动效 (Mica)" }, { text: "指示条滑动 / 页面淡入" }],
         [{ text: "10" }, { text: "MicaLogView" }, { text: "自绘动效 (Mica)" }, { text: "逐行淡入 / 渐隐遮罩" }],
-        [{ text: "11" }, { text: "MicaListView" }, { text: "自绘动效 (Mica)" }, { text: "Win11 导航 / 指示条滑动" }]
+        [{ text: "11" }, { text: "MicaListView" }, { text: "自绘动效 (Mica)" }, { text: "Win11 导航 / 指示条滑动" }],
+        [{ text: "12" }, { text: "MicaSlider" }, { text: "自绘动效 (Mica)" }, { text: "旋钮形变 / 柔光光晕" }],
+        [{ text: "13" }, { text: "MicaProgressBar" }, { text: "自绘动效 (Mica)" }, { text: "平滑插值 / 波浪流光" }],
+        [{ text: "14" }, { text: "MicaBadge" }, { text: "自绘动效 (Mica)" }, { text: "呼吸光效 / 语义色彩" }]
     ];
 
     // 主布局 / Main layout
@@ -234,11 +242,34 @@ export component AppWindow inherits Window {
                                             enabled: false;
                                         }
 
-                                        Text {
-                                            text: "点击: \{root.button-clicks} 次";
-                                            vertical-alignment: center;
-                                            font-size: 12px;
-                                            color: MicaTheme.accent;
+                                        VerticalLayout {
+                                            alignment: center;
+
+                                            Rectangle {
+                                                height: 24px;
+                                                border-radius: 4px;
+                                                background: MicaTheme.surface;
+                                                border-width: 1px;
+                                                border-color: MicaTheme.border;
+
+                                                HorizontalLayout {
+                                                    padding-left: 8px;
+                                                    padding-right: 8px;
+                                                    alignment: center;
+
+                                                    Text {
+                                                        text: "点击: \{root.button-clicks} 次";
+                                                        vertical-alignment: center;
+                                                        font-size: 11px;
+                                                        font-weight: 600;
+                                                        color: MicaTheme.accent;
+                                                        animate color {
+                                                            duration: Motion.fast;
+                                                            easing: Motion.standard;
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 
@@ -373,6 +404,10 @@ export component AppWindow inherits Window {
                                             color: MicaTheme.accent;
                                             overflow: elide;
                                             vertical-alignment: center;
+                                            animate color {
+                                                duration: Motion.fast;
+                                                easing: Motion.standard;
+                                            }
                                         }
                                     }
                                 }
@@ -462,6 +497,10 @@ export component AppWindow inherits Window {
                                             vertical-alignment: center;
                                             font-size: 12px;
                                             color: root.switch-loading ? MicaTheme.accent : MicaTheme.text-secondary;
+                                            animate color {
+                                                duration: Motion.fast;
+                                                easing: Motion.standard;
+                                            }
                                         }
                                     }
                                 }
@@ -572,9 +611,16 @@ export component AppWindow inherits Window {
                                             }
                                         }
 
-                                        if root.list-selected-index == 0: MicaButton {
+                                        MicaButton {
                                             text: "切换材质";
                                             height: 24px;
+                                            visible: self.opacity > 0.05;
+                                            opacity: root.list-selected-index == 0 ? 1.0 : 0.0;
+                                            enabled: root.list-selected-index == 0;
+                                            animate opacity {
+                                                duration: Motion.normal;
+                                                easing: Motion.standard;
+                                            }
                                             clicked => {
                                                 root.dwm-backdrop-index = (root.dwm-backdrop-index >= 3) ? 0 : (root.dwm-backdrop-index + 1);
                                                 root.change-dwm-backdrop(root.dwm-backdrop-index);
@@ -637,10 +683,24 @@ export component AppWindow inherits Window {
                                         color: MicaTheme.text-secondary;
                                     }
 
-                                    Text {
-                                        text: "• 材质状态: " + (root.is-mica-active ? "已成功激活 (DWM_SYSTEMBACKDROP_TYPE::MICA)" : "回退为 Palette 调色板背景");
-                                        font-size: 12px;
-                                        color: MicaTheme.accent;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        Text {
+                                            text: "• 材质状态:";
+                                            font-size: 12px;
+                                            color: MicaTheme.text-secondary;
+                                            vertical-alignment: center;
+                                        }
+
+                                        MicaBadge {
+                                            text: root.dwm-backdrop-index == 0 ? "Mica 亚克力 (激活)" :
+                                                  (root.dwm-backdrop-index == 1 ? "Acrylic 毛玻璃 (激活)" :
+                                                  (root.dwm-backdrop-index == 2 ? "Mica Alt 深层 (激活)" : "None 纯色表面"));
+                                            variant: root.dwm-backdrop-index == 3 ? "warning" : "success";
+                                            pulse: root.dwm-pulse;
+                                        }
                                     }
 
                                     Text {
@@ -1091,6 +1151,142 @@ export component AppWindow inherits Window {
                                             root.dwm-sweep-x = (root.dwm-sweep-x == 0px) ? 380px : 0px;
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // 7. Win11 动效滑块实机展示
+                        MicaExpander {
+                            title: "滑动条 / MicaSlider — 旋钮悬停放大、拖拽微扁平形变与柔光光晕";
+                            expanded: true;
+                            content-height: 86px;
+
+                            VerticalLayout {
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: space-between;
+
+                                    Text {
+                                        text: "Win11 物理回馈滑块 (悬停旋钮放大至 16px，按压扁平至 18×12px):";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+
+                                    Text {
+                                        text: "当前数值: \{Math.round(root.motion-slider-val)}%";
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        color: MicaTheme.accent;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                MicaSlider {
+                                    value <=> root.motion-slider-val;
+                                    changed(v) => {
+                                        root.slider-val = v;
+                                        root.spin-val = Math.round(v);
+                                    }
+                                }
+                            }
+                        }
+
+                        // 8. Win11 动效进度条实机展示
+                        MicaExpander {
+                            title: "进度条 / MicaProgressBar — 平滑缓动插值与双模式波浪扫掠";
+                            expanded: true;
+                            content-height: 104px;
+
+                            VerticalLayout {
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 10px;
+
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: space-between;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        MicaButton {
+                                            text: root.motion-progress-indet ? "切换为确定进度条" : "切换为不确定扫掠条";
+                                            height: 26px;
+                                            clicked => {
+                                                root.motion-progress-indet = !root.motion-progress-indet;
+                                            }
+                                        }
+
+                                        Text {
+                                            text: root.motion-progress-indet ? "模式: Indeterminate 波浪循环流光" : "模式: Determinate 平滑数值缓动插值";
+                                            font-size: 12px;
+                                            color: MicaTheme.text-secondary;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "进度: \{Math.round(root.motion-slider-val)}%";
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        color: MicaTheme.accent;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                MicaProgressBar {
+                                    progress: root.motion-slider-val / 100.0;
+                                    indeterminate: root.motion-progress-indet;
+                                }
+                            }
+                        }
+
+                        // 9. Win11 独立状态动效徽章全家桶
+                        MicaExpander {
+                            title: "状态徽章 / MicaBadge — 呼吸微光指示灯与语义色彩体系";
+                            expanded: true;
+                            content-height: 68px;
+
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                spacing: 14px;
+                                alignment: start;
+
+                                MicaBadge {
+                                    text: "Active 合成器活跃";
+                                    variant: "success";
+                                    pulse: root.dwm-pulse;
+                                }
+
+                                MicaBadge {
+                                    text: "Mica 亚克力透光";
+                                    variant: "info";
+                                    pulse: root.dwm-pulse;
+                                }
+
+                                MicaBadge {
+                                    text: "Warning 警告提示";
+                                    variant: "warning";
+                                    pulse: root.dwm-pulse;
+                                }
+
+                                MicaBadge {
+                                    text: "Neutral 常规就绪";
+                                    variant: "neutral";
+                                    pulse: false;
                                 }
                             }
                         }

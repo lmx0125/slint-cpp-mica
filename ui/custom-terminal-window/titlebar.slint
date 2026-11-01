@@ -73,8 +73,13 @@ export component TerminalTitlebar inherits Rectangle {
                     font-size: 15px;
                     font-family: "Consolas";
                     font-weight: 700;
-                    color: Palette.accent-background;
+                    color: root.is-active ? Palette.accent-background : MicaTheme.text-inactive;
                     vertical-alignment: center;
+
+                    animate color {
+                        duration: Motion.normal;
+                        easing: Motion.standard;
+                    }
                 }
 
                 // 标题文字 / Title text
