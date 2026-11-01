@@ -2,10 +2,11 @@
 // Win11 Fluent 动效滑块 / Win11 Fluent Mica Slider
 //
 // 动效细节 / Motion details:
-//   · 悬停时旋钮由 14px 平滑放大至 16px，浮现柔光光晕；
-//   · 按压拖拽时旋钮保持 18px 饱满圆形与高亮柔光，全量指针捕获防止光晕丢失；
-//   · 激活轨道颜色平滑渐变，失焦/禁用态 150ms 平滑降权；
-//   · 焦点环贴合外层，随 Tab 聚焦浮现。
+//   · 仅当鼠标悬停在旋钮圆圈上时，旋钮由 14px 平滑放大至 16px，浮现 20px 柔光光晕；
+//   · 仅当在旋钮圆圈上按下时才可拖拽，拖拽过程中保持 18px 饱满圆形与 26px 高亮光晕；
+//   · 鼠标不在圆圈上时不可拖拽、光标保持默认箭头，轨道保持静止；
+//   · 统一采用 Win11 Motion.standard 缓动曲线，杜绝过冲抖动；
+//   · 焦点环贴合外层，支持键盘 Tab 聚焦与方向键调节。
 // ============================================================================
 import { Motion, MicaTheme } from "../common/motion.slint";
 
@@ -27,8 +28,9 @@ export component MicaSlider inherits Rectangle {
     private property <float> progress:
         Math.max(0.0, Math.min(1.0, (root.value - root.minimum) / Math.max(0.001, root.maximum - root.minimum)));
 
+    private property <length> thumb-center-x: 8px + root.progress * (root.width - 16px);
+    private property <bool> thumb-has-hover: touch.has-hover && Math.abs(touch.mouse-x - root.thumb-center-x) <= 14px;
     private property <bool> is-dragging: false;
-    private property <bool> is-active: root.is-dragging || touch.pressed;
 
     function update-value(pos-x: length) {
         if (!root.enabled) { return; }
@@ -52,7 +54,7 @@ export component MicaSlider inherits Rectangle {
             width: root.progress * parent.width;
             height: 100%;
             border-radius: 2px;
-            background: (root.is-active || touch.has-hover) ? MicaTheme.accent.brighter(0.06) : MicaTheme.accent;
+            background: (root.is-dragging || root.thumb-has-hover) ? MicaTheme.accent.brighter(0.06) : MicaTheme.accent;
             animate background {
                 duration: Motion.fast;
                 easing: Motion.standard;
@@ -62,7 +64,7 @@ export component MicaSlider inherits Rectangle {
 
     // 旋钮及光晕容器（绝对位移跟随进度）
     thumb-container := Rectangle {
-        x: 8px + root.progress * (root.width - 16px) - self.width / 2;
+        x: root.thumb-center-x - self.width / 2;
         y: (parent.height - self.height) / 2;
         width: 28px;
         height: 28px;
@@ -71,14 +73,14 @@ export component MicaSlider inherits Rectangle {
         halo := Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: root.is-active ? 26px : (touch.has-hover ? 20px : 0px);
-            height: root.is-active ? 26px : (touch.has-hover ? 20px : 0px);
-            border-radius: root.is-active ? 13px : (touch.has-hover ? 10px : 0px);
-            background: MicaTheme.accent.with-alpha(root.is-active ? 0.24 : (touch.has-hover ? 0.12 : 0.0));
+            width: (root.is-dragging) ? 26px : (root.thumb-has-hover ? 20px : 0px);
+            height: (root.is-dragging) ? 26px : (root.thumb-has-hover ? 20px : 0px);
+            border-radius: (root.is-dragging) ? 13px : (root.thumb-has-hover ? 10px : 0px);
+            background: MicaTheme.accent.with-alpha(root.is-dragging ? 0.24 : (root.thumb-has-hover ? 0.12 : 0.0));
 
             animate width, height, border-radius {
                 duration: Motion.fast;
-                easing: Motion.lively;
+                easing: Motion.standard;
             }
             animate background {
                 duration: Motion.fast;
@@ -103,16 +105,16 @@ export component MicaSlider inherits Rectangle {
             }
         }
 
-        // 实体旋钮（Win11 悬停放大至 16px，按压/拖拽时放大至 18px 饱满圆形）
+        // 实体旋钮（Win11 悬停放大至 16px，按压/拖拽时放大至 18px 饱满正圆）
         thumb := Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: root.is-active ? 18px : (touch.has-hover ? 16px : 14px);
-            height: root.is-active ? 18px : (touch.has-hover ? 16px : 14px);
-            border-radius: root.is-active ? 9px : (touch.has-hover ? 8px : 7px);
+            width: (root.is-dragging) ? 18px : (root.thumb-has-hover ? 16px : 14px);
+            height: (root.is-dragging) ? 18px : (root.thumb-has-hover ? 16px : 14px);
+            border-radius: (root.is-dragging) ? 9px : (root.thumb-has-hover ? 8px : 7px);
             background: #ffffff;
             border-width: 1px;
-            border-color: MicaTheme.accent;
+            border-color: (root.is-dragging || root.thumb-has-hover) ? MicaTheme.accent : MicaTheme.border-strong;
 
             animate width, height, border-radius {
                 duration: Motion.fast;
@@ -130,31 +132,46 @@ export component MicaSlider inherits Rectangle {
         height: 100%;
 
         touch := TouchArea {
-            y: -4px;
-            height: parent.height + 8px;
+            y: -6px;
+            height: parent.height + 12px;
             enabled: root.enabled;
-            mouse-cursor: pointer;
+            mouse-cursor: (root.thumb-has-hover || root.is-dragging) ? pointer : default;
 
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
-                    root.is-dragging = true;
-                    focus-scope.focus();
-                    root.update-value(self.mouse-x);
+                    if (root.thumb-has-hover) {
+                        root.is-dragging = true;
+                        focus-scope.focus();
+                    }
                 } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
                     root.is-dragging = false;
                 }
             }
 
             moved => {
-                if (root.is-dragging || self.pressed) {
+                if (root.is-dragging) {
                     root.update-value(self.mouse-x);
                 }
             }
 
             clicked => {
-                focus-scope.focus();
-                root.update-value(self.mouse-x);
+                if (root.thumb-has-hover) {
+                    focus-scope.focus();
+                }
             }
+        }
+
+        key-pressed(event) => {
+            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
+                root.value = Math.max(root.minimum, root.value - (root.maximum - root.minimum) * 0.05);
+                root.changed(root.value);
+                return accept;
+            } else if (event.text == Key.RightArrow || event.text == Key.UpArrow) {
+                root.value = Math.min(root.maximum, root.value + (root.maximum - root.minimum) * 0.05);
+                root.changed(root.value);
+                return accept;
+            }
+            return reject;
         }
     }
 }
