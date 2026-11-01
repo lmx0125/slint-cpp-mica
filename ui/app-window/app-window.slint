@@ -181,7 +181,7 @@ export component AppWindow inherits Window {
         [{ text: "9" }, { text: "MicaTabBar" }, { text: "自绘动效 (Mica)" }, { text: "指示条滑动 / 页面淡入" }],
         [{ text: "10" }, { text: "MicaLogView" }, { text: "自绘动效 (Mica)" }, { text: "逐行淡入 / 渐隐遮罩" }],
         [{ text: "11" }, { text: "MicaListView" }, { text: "自绘动效 (Mica)" }, { text: "Win11 导航 / 指示条滑动" }],
-        [{ text: "12" }, { text: "MicaSlider" }, { text: "自绘动效 (Mica)" }, { text: "旋钮形变 / 柔光光晕" }],
+        [{ text: "12" }, { text: "MicaSlider" }, { text: "自绘动效 (Mica)" }, { text: "旋钮放大 / 柔光光晕" }],
         [{ text: "13" }, { text: "MicaProgressBar" }, { text: "自绘动效 (Mica)" }, { text: "平滑插值 / 波浪流光" }],
         [{ text: "14" }, { text: "MicaBadge" }, { text: "自绘动效 (Mica)" }, { text: "呼吸光效 / 语义色彩" }]
     ];
@@ -1157,7 +1157,7 @@ export component AppWindow inherits Window {
 
                         // 7. Win11 动效滑块实机展示
                         MicaExpander {
-                            title: "滑动条 / MicaSlider — 旋钮悬停放大、拖拽微扁平形变与柔光光晕";
+                            title: "滑动条 / MicaSlider — 旋钮悬停放大、拖拽持续高亮与柔光光晕";
                             expanded: true;
                             content-height: 86px;
 
@@ -1173,7 +1173,7 @@ export component AppWindow inherits Window {
                                     alignment: space-between;
 
                                     Text {
-                                        text: "Win11 物理回馈滑块 (悬停旋钮放大至 16px，按压扁平至 18×12px):";
+                                        text: "Win11 物理回馈滑块 (悬停旋钮放大至 16px，按压拖拽保持 18px 饱满光晕):";
                                         font-size: 12px;
                                         color: MicaTheme.text-secondary;
                                         vertical-alignment: center;
