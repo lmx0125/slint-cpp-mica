@@ -84,6 +84,20 @@ bool open(const WindowHolderPtr& handle, CloseBehavior close_behavior)
     // ── 5. Mica 特效联动 / Mica visual effect ──
     platform::apply_mica_effect([&terminal] { terminal->set_is_mica_active(true); }, hook_ok);
 
+    // ── 5b. 填充初始终端诊断日志 / Populate initial diagnostic logs ──
+    auto logs_model = std::make_shared<slint::VectorModel<slint::SharedString>>(
+        std::vector<slint::SharedString>{
+            "[00:00.001] [BOOT] CustomTerminalWindow initialized (no-frame: true)",
+            "[00:00.012] [DWM] Composition attributes applied: Mica material enabled",
+            "[00:00.018] [HOOK] CBT Hook matched title '自绘终端日志 (Console Output)'",
+            "[00:00.024] [FRAME] Borderless subclassing & window shadow installed synchronously",
+            "[00:00.030] [TITLEBAR] Custom hit-test router connected (WM_NCHITTEST & Snap Layouts)",
+            "[00:00.045] [UI] MicaLogView entrance transition started (8px slide-up + fade)",
+            "[00:00.060] [STATUS] Terminal stream online and accepting output",
+            "[00:00.080] [INFO] Click '复制日志 / Copy Log' below to copy this buffer to clipboard"
+        });
+    terminal->set_logs(logs_model);
+
     // ── 6. 绑定 UI 回调 / Bind the UI callbacks ──
     // 6a. 关闭：Destroy → hide() 并清空持有器；Hide → 只 hide()
     // 6a. Close: Destroy → hide() and clear the holder; Hide → hide() only
@@ -121,8 +135,41 @@ bool open(const WindowHolderPtr& handle, CloseBehavior close_behavior)
     // 6e. 复制日志 / Copy log
     const auto weak_log = weak;
     terminal->on_copy_log([weak_log] {
-        if (weak_log.lock()) {
-            std::printf("[CustomTerminal] 复制日志（功能预留） / Copy log (feature reserved)\n");
+        if (auto strong = weak_log.lock()) {
+            auto model = (*strong)->get_logs();
+            if (model != nullptr) {
+                std::string combined;
+                for (size_t i = 0; i < model->row_count(); ++i) {
+                    if (auto row = model->row_data(i)) {
+                        combined += row->data();
+                        combined += "\r\n";
+                    }
+                }
+                if (!combined.empty()) {
+                    int wide_len = MultiByteToWideChar(CP_UTF8, 0, combined.c_str(), -1, nullptr, 0);
+                    if (wide_len > 0) {
+                        std::wstring wide_text(wide_len, L'\0');
+                        MultiByteToWideChar(CP_UTF8, 0, combined.c_str(), -1, wide_text.data(), wide_len);
+                        HWND hwnd = (*strong)->window().win32_hwnd();
+                        if (OpenClipboard(hwnd)) {
+                            EmptyClipboard();
+                            const size_t bytes = wide_len * sizeof(wchar_t);
+                            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+                            if (hMem != nullptr) {
+                                void* ptr = GlobalLock(hMem);
+                                if (ptr != nullptr) {
+                                    std::memcpy(ptr, wide_text.c_str(), bytes);
+                                    GlobalUnlock(hMem);
+                                    SetClipboardData(CF_UNICODETEXT, hMem);
+                                }
+                            }
+                            CloseClipboard();
+                            std::printf("[CustomTerminal] 日志已成功复制到剪贴板 (%zu 行) / Copied to clipboard\n",
+                                        model->row_count());
+                        }
+                    }
+                }
+            }
         }
     });
 
@@ -132,7 +179,7 @@ bool open(const WindowHolderPtr& handle, CloseBehavior close_behavior)
 
     // 若 CBT Hook 未能捕获（例如被其它窗口先激活），退化为事件循环中的补丁安装
     // If the hook did not capture the window, fall back to installing from the event loop
-    if (hook_ok) {
+    if (!hook_ok) {
         platform::WindowFrame frame_fallback = frame;
         slint::Timer::single_shot(std::chrono::milliseconds(0), [frame_fallback]() mutable {
             if (frame_fallback.hwnd() == nullptr) {

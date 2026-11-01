@@ -1,5 +1,8 @@
 //! 程序入口：窗口创建、CBT Hook 编排与事件循环
 //! Entry point: window creation, CBT Hook orchestration and the event loop.
+#include <windows.h>
+#include <dwmapi.h>
+
 #include <chrono>
 #include <cstdio>
 #include <memory>
@@ -14,6 +17,22 @@
 #include "windows/custom_terminal/custom_terminal.h"
 #include "windows/native_terminal/native_terminal.h"
 #include "windows/windows.h"
+
+#ifndef DWMWA_SYSTEMBACKDROP_TYPE
+#define DWMWA_SYSTEMBACKDROP_TYPE 38
+#endif
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWCP_DONOTROUND
+#define DWMWCP_DONOTROUND 1
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+#ifndef DWMWCP_ROUNDSMALL
+#define DWMWCP_ROUNDSMALL 3
+#endif
 
 namespace {
 
@@ -94,6 +113,83 @@ int main(int /*argc*/, char** /*argv*/)
             std::printf("[Main] 原生终端窗口已打开 / Native terminal window opened\n");
         } else {
             std::printf("[Main] 打开原生终端窗口失败 / Failed to open the native terminal\n");
+        }
+    });
+
+    // 6b. 绑定动效日志流演示交互 / Bind motion demo log callbacks
+    auto demo_logs_model = std::make_shared<slint::VectorModel<slint::SharedString>>(
+        std::vector<slint::SharedString>{
+            "[00:00.001] [System] Slint C++ Fluent engine initialized",
+            "[00:00.015] [Theme] Windows 11 Mica material applied to background",
+            "[00:00.022] [Motion] Cubic-bezier timing curves registered",
+            "[00:00.038] [DWM] Composition window frame subclass installed",
+            "[00:00.050] [Ready] Demo components ready for interaction"
+        });
+    app->set_demo_logs(demo_logs_model);
+
+    app->on_add_demo_log([demo_logs_model]() {
+        static int event_count = 1;
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 100000;
+        char buffer[128];
+        std::snprintf(buffer, sizeof(buffer), "[+%05lld ms] [Action #%d] Dynamic Fluent motion event triggered",
+                      static_cast<long long>(ms), event_count++);
+        demo_logs_model->push_back(slint::SharedString(buffer));
+        std::printf("[Main] 追加动效演示日志: %s\n", buffer);
+    });
+
+    app->on_reset_demo_logs([demo_logs_model]() {
+        demo_logs_model->set_vector({
+            "[00:00.001] [System] Slint C++ Fluent engine initialized",
+            "[00:00.015] [Theme] Windows 11 Mica material applied to background",
+            "[00:00.022] [Motion] Cubic-bezier timing curves registered",
+            "[00:00.038] [DWM] Composition window frame subclass installed",
+            "[00:00.050] [Ready] Demo components ready for interaction"
+        });
+        std::printf("[Main] 重置动效演示日志样本\n");
+    });
+
+    app->on_clear_demo_logs([demo_logs_model]() {
+        demo_logs_model->clear();
+        std::printf("[Main] 已清空动效演示日志\n");
+    });
+
+    // 6c. 绑定 DWM 材质与圆角动态切换回调 / Bind dynamic DWM backdrop & corner switching
+    auto app_weak = slint::ComponentWeakHandle<ui::AppWindow>(app);
+    app->on_change_dwm_backdrop([app_weak, frame_holder](int index) {
+        if (auto strong = app_weak.lock()) {
+            (*strong)->set_dwm_backdrop_index(index);
+            // index == 3 为 None 纯色表面，关闭窗口透明度；其余启用背景穿透
+            (*strong)->set_is_mica_active(index != 3);
+        }
+        if (frame_holder && frame_holder->has_value()) {
+            HWND hwnd = (*frame_holder)->hwnd();
+            if (hwnd != nullptr) {
+                // index: 0 -> Mica (2), 1 -> Acrylic (3), 2 -> Tabbed/Mica Alt (4), 3 -> None (1)
+                uint32_t type = (index == 0) ? 2 : (index == 1) ? 3 : (index == 2) ? 4 : 1;
+                ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &type, sizeof(type));
+                ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+                ::InvalidateRect(hwnd, nullptr, TRUE);
+                std::printf("[Main] DWM 背景材质已动态切换为: %u (index: %d)\n", type, index);
+            }
+        }
+    });
+
+    app->on_change_dwm_corner([app_weak, frame_holder](int radius) {
+        if (auto strong = app_weak.lock()) {
+            (*strong)->set_dwm_corner_radius(radius);
+        }
+        if (frame_holder && frame_holder->has_value()) {
+            HWND hwnd = (*frame_holder)->hwnd();
+            if (hwnd != nullptr) {
+                uint32_t pref = (radius >= 8) ? DWMWCP_ROUND : (radius > 0) ? DWMWCP_ROUNDSMALL : DWMWCP_DONOTROUND;
+                ::DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
+                ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+                ::InvalidateRect(hwnd, nullptr, TRUE);
+                std::printf("[Main] DWM 窗口圆角已动态切换为: %u (radius: %d)\n", pref, radius);
+            }
         }
     });
 

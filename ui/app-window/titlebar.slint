@@ -10,8 +10,8 @@ export global WindowControls {
 
     in-out property <bool> maximized: false;
 
-    // 暴露尺寸配置给 Rust 消息判定
-    // Expose size config for Rust hit-test calculation
+    // 暴露尺寸配置给 Rust/C++ 消息判定
+    // Expose size config for native hit-test calculation
     in-out property <bool> show-minimize: true;
     in-out property <bool> show-maximize: true;
     in-out property <bool> show-close: true;
@@ -108,7 +108,7 @@ export component Titlebar inherits Rectangle {
             background: WindowControls.min-pressed ? root.btn-pressed-bg :
                         WindowControls.min-hover ? root.btn-hover-bg : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
@@ -120,11 +120,10 @@ export component Titlebar inherits Rectangle {
                 background: root.foreground-color;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                // 按下时图标轻微变淡，提供比底色更强的按下确认
-                // Slightly dim the glyph on press for a firmer press confirmation
-                opacity: WindowControls.min-pressed ? 0.82 : 1;
+                // 悬停/按下图标亮度与透明度平滑过渡
+                opacity: WindowControls.min-pressed ? 0.72 : (WindowControls.min-hover ? 1 : 0.88);
                 animate opacity {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
             }
@@ -138,16 +137,11 @@ export component Titlebar inherits Rectangle {
             background: WindowControls.max-pressed ? root.btn-pressed-bg :
                         WindowControls.max-hover ? root.btn-hover-bg : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
             // 未最大化：圆角矩形（用 Path 绘制，与还原图标同一渲染流水线）
-            // Rectangle 的 border 和 Path 的 stroke 在高 DPI 下抗锯齿算法不同，
-            // Path 贝塞尔曲线更接近原生字形渲染效果
-            // 未最大化图标：常驻元素，用 opacity 交叉淡化（if 元素无法做动画）
-            // Not-maximized glyph: kept alive and cross-faded via opacity, since
-            // elements under `if` are created/destroyed and cannot be animated
             Path {
                 width: 10px;
                 height: 10px;
@@ -156,7 +150,7 @@ export component Titlebar inherits Rectangle {
                 stroke: root.foreground-color;
                 stroke-width: 1px;
                 opacity: WindowControls.maximized ? 0
-                        : (WindowControls.max-pressed ? 0.82 : 1);
+                        : (WindowControls.max-pressed ? 0.72 : (WindowControls.max-hover ? 1 : 0.88));
                 animate opacity {
                     duration: Motion.normal;
                     easing: Motion.standard;
@@ -175,19 +169,15 @@ export component Titlebar inherits Rectangle {
             }
 
             // 已最大化（还原）：标准 Windows 双框
-            // 前框（8×8 圆角矩形）+ 后框（L 型折线，仅画顶边和右边）
-            // 已最大化图标：常驻元素，与上方图标交叉淡化
-            // Maximized glyph: kept alive and cross-faded against the glyph above
             Path {
                 width: 10px;
                 height: 10px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 stroke: root.foreground-color;
-                // 1px 逻辑像素：100% = 1px，175% = 1.75px（原 1.2px = 2.1px 过粗有毛边）
                 stroke-width: 1px;
                 opacity: WindowControls.maximized
-                    ? (WindowControls.max-pressed ? 0.82 : 1) : 0;
+                    ? (WindowControls.max-pressed ? 0.72 : (WindowControls.max-hover ? 1 : 0.88)) : 0;
                 animate opacity {
                     duration: Motion.normal;
                     easing: Motion.standard;
@@ -205,8 +195,6 @@ export component Titlebar inherits Rectangle {
                 QuadraticTo { control-x: 0; control-y: 2; x: 1.5; y: 2; }
 
                 // --- 2. 后方 L 型折线：(2,0)→(10,0) 顶边 + (10,0)→(10,7.5) 右边 ---
-                // 与前框同为 1.5px 圆角，视觉上两框完全对称
-                // x: 2.5 = 左端让出半个 stroke 宽度，避免与前框左边重叠
                 MoveTo { x: 2.5; y: 0; }
                 LineTo { x: 8.5; y: 0; }
                 QuadraticTo { control-x: 10; control-y: 0; x: 10; y: 1.5; }
@@ -219,13 +207,10 @@ export component Titlebar inherits Rectangle {
         if WindowControls.show-close: close-btn := Rectangle {
             width: WindowControls.close-width;
             // 关闭按钮三阶：Pressed 降低红底浓度 / Hover 用 Win11 标准警示红 / 默认透明
-            // 失焦时仍保留红色 hover 效果，与 Win11 原生标题栏关闭按钮行为一致
-            // Close button: Pressed dims red / Hover shows Win11 red / Default transparent
-            // Inactive state still keeps red hover, matching Win11 native close button behavior
             background: WindowControls.close-pressed ? MicaTheme.close-pressed :
                         WindowControls.close-hover ? MicaTheme.close-hover : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
@@ -234,18 +219,17 @@ export component Titlebar inherits Rectangle {
                 height: 10px;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                // 悬停/按下时显示白色（不论是否激活）；其余情况使用 foreground-color（失焦时已变淡）
-                // White when hover/pressed (regardless of active state); otherwise use foreground-color (dimmed when inactive)
+                // 悬停/按下时平滑过渡显示白色
                 stroke: (WindowControls.close-hover || WindowControls.close-pressed)
                     ? #ffffff : root.foreground-color;
                 stroke-width: 1px;
                 animate stroke {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
                 opacity: WindowControls.close-pressed ? 0.82 : 1;
                 animate opacity {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
 

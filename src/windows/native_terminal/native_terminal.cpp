@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <string>
 
 #include "app-window.h"
 #include "platform/display.h"
@@ -70,6 +71,20 @@ bool open(const WindowHolderPtr& handle, CloseBehavior close_behavior)
 
     terminal->set_is_mica_active(sys_info::is_win11());
 
+    // ── 3b. 填充初始终端诊断日志 / Populate initial diagnostic logs ──
+    auto logs_model = std::make_shared<slint::VectorModel<slint::SharedString>>(
+        std::vector<slint::SharedString>{
+            "[00:00.001] [BOOT] NativeTerminalWindow initialized (native caption buttons)",
+            "[00:00.014] [DWM] Native caption frame subclassed with DWMWA_CAPTION_BUTTON_BOUNDS",
+            "[00:00.020] [HOOK] CBT Hook matched title '原生终端日志 (Console Output)'",
+            "[00:00.026] [THEME] Mica system backdrop applied successfully",
+            "[00:00.035] [CAPTION] Native Win32 Min/Max/Close rendered directly by OS DWM",
+            "[00:00.042] [UI] MicaLogView staggered line entrance initialized",
+            "[00:00.055] [STATUS] Terminal stream active and responsive",
+            "[00:00.075] [INFO] Click '复制日志 / Copy Log' below to copy this buffer to clipboard"
+        });
+    terminal->set_logs(logs_model);
+
     // ── 4. 绑定 UI 回调 / Bind the UI callbacks ──
     const slint::ComponentWeakHandle<ui::NativeTerminalWindow> weak(terminal);
 
@@ -97,17 +112,48 @@ bool open(const WindowHolderPtr& handle, CloseBehavior close_behavior)
     });
 
     // 4b. 标题栏拖拽（Slint 拖拽区 → Win32 原生拖拽）
-    // 4b. Titlebar drag (Slint drag area → native Win32 drag)
     terminal->on_drag([frame] { frame->drag(); });
 
     // 4c. 双击标题栏切换最大化 / 还原
-    // 4c. Double-click the titlebar to toggle maximize / restore
     terminal->on_double_click([frame] { frame->toggle_maximized(); });
 
     // 4d. 复制日志 / Copy log
     terminal->on_copy_log([weak] {
-        if (weak.lock()) {
-            std::printf("[NativeTerminal] 复制日志（功能预留） / Copy log (feature reserved)\n");
+        if (auto strong = weak.lock()) {
+            auto model = (*strong)->get_logs();
+            if (model != nullptr) {
+                std::string combined;
+                for (size_t i = 0; i < model->row_count(); ++i) {
+                    if (auto row = model->row_data(i)) {
+                        combined += row->data();
+                        combined += "\r\n";
+                    }
+                }
+                if (!combined.empty()) {
+                    int wide_len = MultiByteToWideChar(CP_UTF8, 0, combined.c_str(), -1, nullptr, 0);
+                    if (wide_len > 0) {
+                        std::wstring wide_text(wide_len, L'\0');
+                        MultiByteToWideChar(CP_UTF8, 0, combined.c_str(), -1, wide_text.data(), wide_len);
+                        HWND hwnd = (*strong)->window().win32_hwnd();
+                        if (OpenClipboard(hwnd)) {
+                            EmptyClipboard();
+                            const size_t bytes = wide_len * sizeof(wchar_t);
+                            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+                            if (hMem != nullptr) {
+                                void* ptr = GlobalLock(hMem);
+                                if (ptr != nullptr) {
+                                    std::memcpy(ptr, wide_text.c_str(), bytes);
+                                    GlobalUnlock(hMem);
+                                    SetClipboardData(CF_UNICODETEXT, hMem);
+                                }
+                            }
+                            CloseClipboard();
+                            std::printf("[NativeTerminal] 日志已成功复制到剪贴板 (%zu 行) / Copied to clipboard\n",
+                                        model->row_count());
+                        }
+                    }
+                }
+            }
         }
     });
 

@@ -15,6 +15,9 @@ import {
     StandardListView,
     StandardTableView,
     GroupBox,
+    ProgressIndicator,
+    Spinner,
+    AboutSlint,
 } from "std-widgets.slint";
 
 // 引入系统调色板单例 / Import system palette singleton
@@ -28,14 +31,16 @@ import { MicaButton } from "../widgets/MicaButton.slint";
 import { MicaSwitch } from "../widgets/MicaSwitch.slint";
 import { MicaExpander } from "../widgets/MicaExpander.slint";
 import { MicaTabBar, MicaTabView, MicaTabPage } from "../widgets/MicaTabBar.slint";
+import { MicaLogView } from "../widgets/MicaLogView.slint";
+import { MicaListView, MicaListItemData } from "../widgets/MicaListView.slint";
 
-// 2. 导出 WindowControls 使得 Rust 端可以访问 / 2. Export WindowControls for Rust-side access
+// 2. 导出 WindowControls 使得 Rust/C++ 端可以访问 / 2. Export WindowControls for native-side access
 export {
     WindowControls,
 }
 
-// 导入并导出两种终端窗口组件，供 Rust 端在 slint::include_modules!() 中生成结构体
-// Import and export both terminal window components for Rust code generation
+// 导入并导出两种终端窗口组件，供代码生成
+// Import and export both terminal window components for code generation
 import {
     CustomTerminalWindow,
 } from "../custom-terminal-window/custom-terminal-window.slint";
@@ -46,14 +51,14 @@ export { CustomTerminalWindow, NativeTerminalWindow }
 
 export component AppWindow inherits Window {
     // 导出初始宽高属性 / Export initial width and height properties
-    in-out property <length> init-width: 1200px;
-    in-out property <length> init-height: 700px;
+    in-out property <length> init-width: 1080px;
+    in-out property <length> init-height: 720px;
 
     // 绑定首选尺寸 / Bind preferred window dimensions
     preferred-width: init-width;
     preferred-height: init-height;
 
-    // Mica 状态控制（由 Rust 侧注入） / Mica active status (controlled by Rust)
+    // Mica 状态控制（由 C++ 平台层注入） / Mica active status (controlled by C++)
     in-out property <bool> is-mica-active: false;
 
     // Mica 成功开启则透明，否则使用系统 Palette.background
@@ -73,29 +78,104 @@ export component AppWindow inherits Window {
     callback open-custom-terminal-window();
     callback open-native-terminal-window();
 
-    // 状态数据管理 / State data management
+    // 基础控件交互状态 / Basic controls interactive states
+    in-out property <int> button-clicks: 0;
+    in-out property <bool> chk-auto-save: true;
+    in-out property <bool> chk-hw-accel: true;
+    in-out property <bool> switch-status: true;
+    in-out property <bool> switch-loading: true;
     in-out property <string> input-text: "";
-    in-out property <float> slider-val: 50.0;
-    in-out property <int> spin-val: 10;
-    in-out property <bool> switch-status: false;
+    in-out property <string> input-password: "";
+    in-out property <string> combo-selection: "Mica 亚克力材质 (默认)";
+    in-out property <float> slider-val: 68.0;
+    in-out property <int> spin-val: 68;
+
+    // 列表选中状态 / List selected state
+    in-out property <int> list-selected-index: 0;
 
     // 动效演示页状态 / Motion demo page state
-    private property <bool> motion-switch-on: true;
-    private property <bool> motion-switch-off: false;
-    private property <int> motion-tab: 0;
+    in-out property <int> motion-clicks: 0;
+    in-out property <bool> motion-switch-on: true;
+    in-out property <bool> motion-switch-off: false;
+    in-out property <int> motion-tab: 0;
+
+    // Windows 11 DWM 材质与视觉合成状态 / Win11 DWM backdrop & composition states
+    in-out property <int> dwm-backdrop-index: 0;
+    in-out property <int> dwm-corner-radius: 8;
+    in-out property <length> dwm-sweep-x: 0px;
+    in-out property <bool> dwm-pulse: true;
+
+    callback change-dwm-backdrop(int);
+    callback change-dwm-corner(int);
+
+    // DWM 视觉合成状态动画定时器 / Animation timers for DWM visual effects
+    pulse-timer := Timer {
+        interval: 1000ms;
+        running: true;
+        triggered => {
+            root.dwm-pulse = !root.dwm-pulse;
+        }
+    }
+
+    sweep-timer := Timer {
+        interval: 2200ms;
+        running: true;
+        triggered => {
+            root.dwm-sweep-x = (root.dwm-sweep-x == 0px) ? 380px : 0px;
+        }
+    }
+
+    // 动效日志流演示数据 / Demo logs model
+    in-out property <[string]> demo-logs: [
+        "[00:00.001] [System] Slint C++ Fluent engine initialized",
+        "[00:00.015] [Theme] Windows 11 Mica material applied to background",
+        "[00:00.022] [Motion] Cubic-bezier timing curves registered",
+        "[00:00.038] [DWM] Composition window frame subclass installed",
+        "[00:00.050] [Ready] Demo components ready for interaction"
+    ];
+
+    callback add-demo-log();
+    callback reset-demo-logs();
+    callback clear-demo-logs();
+
+    // 列表视图展示模式：true 为 Win11 动效列表，false 为内置标准列表
+    in-out property <bool> use-mica-list: true;
+
+    // 自绘动效列表数据模型（支持独立图标、徽章、呼吸指示灯与流光）
+    private property <[MicaListItemData]> mica-list-items: [
+        { icon: "🪟", title: "Windows 11 DWM 合成器", badge: "Active", badge-active: true },
+        { icon: "✨", title: "Mica 材质与亚克力滤镜", badge: "Enabled", badge-active: true },
+        { icon: "🎯", title: "Win32 CBT 消息捕获钩子", badge: "Hooked", badge-active: true },
+        { icon: "📐", title: "Snap Layouts 贴靠布局", badge: "Supported", badge-active: true },
+        { icon: "🎨", title: "Fluent 动效标准曲线", badge: "cubic-bezier", badge-active: false },
+        { icon: "🖥️", title: "高 DPI 自适应矢量渲染", badge: "100%-200%", badge-active: false },
+        { icon: "⚡", title: "C++20 与 Slint 1.17.1", badge: "Runtime", badge-active: false }
+    ];
 
     // 列表数据模型 / List view data model
     private property <[StandardListViewItem]> list-data: [
-        { text: "选项 A / Option A" },
-        { text: "选项 B / Option B" },
-        { text: "选项 C / Option C" }
+        { text: "🪟 Windows 11 DWM 合成器 (Active)" },
+        { text: "✨ Mica 材质与亚克力滤镜 (Enabled)" },
+        { text: "🎯 Win32 CBT 消息捕获钩子 (Hooked)" },
+        { text: "📐 Snap Layouts 贴靠布局 (Supported)" },
+        { text: "🎨 Fluent 动效标准曲线 (cubic-bezier)" },
+        { text: "🖥️ 高 DPI 自适应矢量渲染 (100% - 200%)" },
+        { text: "⚡ C++20 与 Slint 1.17.1 运行时" }
     ];
 
     // 表格数据模型 / Table view data model
     private property <[[StandardListViewItem]]> table-rows: [
-        [{ text: "1" }, { text: "张三 (Alice)" }, { text: "在线 (Online)" }],
-        [{ text: "2" }, { text: "李四 (Bob)" }, { text: "离线 (Offline)" }],
-        [{ text: "3" }, { text: "王五 (Charlie)" }, { text: "忙碌 (Busy)" }]
+        [{ text: "1" }, { text: "Button" }, { text: "内置控件 (Std)" }, { text: "主要 / 次要 / 禁用态" }],
+        [{ text: "2" }, { text: "LineEdit" }, { text: "内置控件 (Std)" }, { text: "单行文本 / 密码模式" }],
+        [{ text: "3" }, { text: "Slider / SpinBox" }, { text: "内置控件 (Std)" }, { text: "连续调节与步进联动" }],
+        [{ text: "4" }, { text: "ProgressIndicator" }, { text: "内置控件 (Std)" }, { text: "确定 / 不确定双模式" }],
+        [{ text: "5" }, { text: "Spinner" }, { text: "内置控件 (Std)" }, { text: "环形加载动画" }],
+        [{ text: "6" }, { text: "MicaButton" }, { text: "自绘动效 (Mica)" }, { text: "100ms Hover / 焦点环" }],
+        [{ text: "7" }, { text: "MicaSwitch" }, { text: "自绘动效 (Mica)" }, { text: "弹性过冲 / 悬停光晕" }],
+        [{ text: "8" }, { text: "MicaExpander" }, { text: "自绘动效 (Mica)" }, { text: "200ms 折叠 / 交叉淡化" }],
+        [{ text: "9" }, { text: "MicaTabBar" }, { text: "自绘动效 (Mica)" }, { text: "指示条滑动 / 页面淡入" }],
+        [{ text: "10" }, { text: "MicaLogView" }, { text: "自绘动效 (Mica)" }, { text: "逐行淡入 / 渐隐遮罩" }],
+        [{ text: "11" }, { text: "MicaListView" }, { text: "自绘动效 (Mica)" }, { text: "Win11 导航 / 指示条滑动" }]
     ];
 
     // 主布局 / Main layout
@@ -114,123 +194,276 @@ export component AppWindow inherits Window {
             Tab {
                 title: "基础控件 / Basic Controls";
                 ScrollView {
-                    VerticalBox {
-                        padding: 20px;
-                        spacing: 20px;
-                        alignment: start;
+                    VerticalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 12px;
+                        padding-bottom: 16px;
+                        spacing: 10px;
 
-                        // 1. GroupBox - 按钮与开关 / Buttons & Toggles
-                        GroupBox {
-                            title: "按钮与开关 / Buttons & Toggles";
-                            HorizontalBox {
-                                spacing: 15px;
-                                alignment: start;
+                        // 第一行：两列布局（按钮操作 + 开关选项）
+                        HorizontalLayout {
+                            spacing: 12px;
 
-                                Button {
-                                    text: "打开自绘终端窗口 / Custom Terminal";
-                                    primary: true;
-                                    clicked => { root.open-custom-terminal-window(); }
+                            // 1. GroupBox - 按钮控制与触发
+                            GroupBox {
+                                title: "按钮控制与触发 / Buttons & Actions";
+                                horizontal-stretch: 1;
+
+                                VerticalLayout {
+                                    spacing: 8px;
+                                    padding: 4px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        Button {
+                                            text: "主要操作 / Primary";
+                                            primary: true;
+                                            clicked => { root.button-clicks += 1; }
+                                        }
+
+                                        Button {
+                                            text: "次要操作 / Standard";
+                                            clicked => { root.button-clicks += 1; }
+                                        }
+
+                                        Button {
+                                            text: "已禁用 / Disabled";
+                                            enabled: false;
+                                        }
+
+                                        Text {
+                                            text: "点击: \{root.button-clicks} 次";
+                                            vertical-alignment: center;
+                                            font-size: 12px;
+                                            color: MicaTheme.accent;
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+                                        Button {
+                                            text: "🚀 打开自绘终端窗口 / Custom Terminal";
+                                            primary: true;
+                                            clicked => { root.open-custom-terminal-window(); }
+                                        }
+
+                                        Button {
+                                            text: "🪟 打开原生终端窗口 / Native Terminal";
+                                            clicked => { root.open-native-terminal-window(); }
+                                        }
+                                    }
                                 }
+                            }
 
-                                Button {
-                                    text: "打开原生终端窗口 / Native Terminal";
-                                    primary: true;
-                                    clicked => { root.open-native-terminal-window(); }
-                                }
+                            // 2. GroupBox - 开关与选项
+                            GroupBox {
+                                title: "开关与选项 / Toggles & Options";
+                                horizontal-stretch: 1;
 
-                                CheckBox {
-                                    text: "同意条款 / Agree to Terms";
-                                    checked: true;
-                                }
+                                VerticalLayout {
+                                    spacing: 8px;
+                                    padding: 4px;
 
-                                Switch {
-                                    text: "启用通知 / Enable Notifications";
-                                    checked <=> switch-status;
+                                    HorizontalLayout {
+                                        spacing: 14px;
+                                        alignment: start;
+
+                                        CheckBox {
+                                            text: "自动保存 / Auto-save";
+                                            checked <=> root.chk-auto-save;
+                                        }
+
+                                        CheckBox {
+                                            text: "硬件加速 / HW Accel";
+                                            checked <=> root.chk-hw-accel;
+                                        }
+
+                                        CheckBox {
+                                            text: "只读保护 / Protected";
+                                            enabled: false;
+                                            checked: false;
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 16px;
+                                        alignment: start;
+
+                                        Switch {
+                                            text: "通知推送 / Alerts";
+                                            checked <=> root.switch-status;
+                                        }
+
+                                        Switch {
+                                            text: "模拟加载 / Simulate Task";
+                                            checked <=> root.switch-loading;
+                                        }
+
+                                        Switch {
+                                            text: "锁定开关 / Disabled";
+                                            enabled: false;
+                                            checked: true;
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        // 2. GroupBox - 文本输入 / Text Inputs
-                        GroupBox {
-                            title: "文本输入 / Text Inputs";
-                            VerticalBox {
-                                spacing: 12px;
-                                HorizontalBox {
-                                    Text {
-                                        text: "单行输入 / Single-line: ";
-                                        vertical-alignment: center;
+                        // 第二行：两列布局（文本输入 + 多行备忘）
+                        HorizontalLayout {
+                            spacing: 12px;
+
+                            // 3. GroupBox - 文本输入
+                            GroupBox {
+                                title: "文本输入与选择 / Text Inputs & Select";
+                                horizontal-stretch: 1;
+
+                                GridBox {
+                                    spacing: 8px;
+                                    padding: 4px;
+
+                                    Row {
+                                        Text {
+                                            text: "单行输入 / LineEdit:";
+                                            vertical-alignment: center;
+                                        }
+                                        LineEdit {
+                                            placeholder-text: "输入文字实时联动预览...";
+                                            text <=> root.input-text;
+                                        }
                                     }
 
-                                    LineEdit {
-                                        placeholder-text: "请输入文字... / Enter text...";
-                                        text <=> input-text;
+                                    Row {
+                                        Text {
+                                            text: "密码输入 / Password:";
+                                            vertical-alignment: center;
+                                        }
+                                        LineEdit {
+                                            input-type: password;
+                                            placeholder-text: "在此输入密码...";
+                                            text <=> root.input-password;
+                                        }
+                                    }
+
+                                    Row {
+                                        Text {
+                                            text: "下拉选择 / ComboBox:";
+                                            vertical-alignment: center;
+                                        }
+                                        ComboBox {
+                                            model: ["Mica 亚克力材质 (默认)", "Acrylic 毛玻璃效果", "Mica Alt 深层亚克力", "纯色表面 (None)"];
+                                            current-value <=> root.combo-selection;
+                                        }
+                                    }
+
+                                    Row {
+                                        Text {
+                                            text: "实时联动预览:";
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            text: (root.input-text == "" ? "（未输入文本）" : "\{root.input-text}")
+                                                + " | 主题: " + root.combo-selection;
+                                            font-size: 12px;
+                                            color: MicaTheme.accent;
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                        }
                                     }
                                 }
+                            }
 
-                                HorizontalBox {
-                                    Text {
-                                        text: "多行输入 / Multi-line: ";
-                                        vertical-alignment: top;
-                                    }
+                            // 4. GroupBox - 多行编辑
+                            GroupBox {
+                                title: "多行文本编辑 / Multi-line TextEdit";
+                                horizontal-stretch: 1;
+
+                                VerticalLayout {
+                                    spacing: 4px;
+                                    padding: 4px;
 
                                     TextEdit {
-                                        height: 80px;
-                                        text: "这是多行文本组件的默认内容...\n支持换行。\nThis is default multi-line text content...";
+                                        text: "Slint 1.17.1 C++20 + Windows 11 Mica 深度整合演示\n· 支持无边框 DWM 阴影与 Snap Layouts 贴靠菜单\n· 包含标准全家桶控件与自绘 Fluent 动效体系\n· 支持深浅色自适应、高 DPI 缩放与平滑过渡";
+                                        height: 104px;
                                     }
                                 }
                             }
                         }
 
-                        // 3. GroupBox - 数值与选择 / Selectors & Spinners
+                        // 第三行：整行布局（数值调节与双模进度反馈）
                         GroupBox {
-                            title: "数值与选择 / Selectors & Spinners";
+                            title: "数值调节与双模进度反馈 / Numerical & Progress Feedback";
+
                             GridBox {
-                                spacing: 15px;
+                                spacing: 10px;
+                                padding: 4px;
+
                                 Row {
                                     Text {
-                                        text: "滑块调节 / Slider: ";
+                                        text: "滑块调节 / Slider:";
                                         vertical-alignment: center;
                                     }
-
                                     Slider {
                                         minimum: 0.0;
                                         maximum: 100.0;
-                                        value <=> slider-val;
+                                        value <=> root.slider-val;
+                                        changed(v) => { root.spin-val = Math.round(v); }
                                     }
-
                                     Text {
-                                        text: "\{Math.round(slider-val)}";
+                                        text: "微调步进 / SpinBox:";
                                         vertical-alignment: center;
                                     }
-                                }
-
-                                Row {
-                                    Text {
-                                        text: "数字微调 / SpinBox: ";
-                                        vertical-alignment: center;
-                                    }
-
                                     SpinBox {
                                         minimum: 0;
                                         maximum: 100;
-                                        value <=> spin-val;
+                                        value <=> root.spin-val;
                                     }
-
-                                    Rectangle { }
+                                    Text {
+                                        text: "数值: \{Math.round(root.slider-val)}%";
+                                        vertical-alignment: center;
+                                        font-weight: 700;
+                                        color: MicaTheme.accent;
+                                    }
                                 }
 
                                 Row {
                                     Text {
-                                        text: "下拉选择 / ComboBox: ";
+                                        text: "确定进度条 / Progress:";
                                         vertical-alignment: center;
                                     }
-
-                                    ComboBox {
-                                        model: ["红茶 / Black Tea", "绿茶 / Green Tea", "咖啡 / Coffee", "果汁 / Juice"];
-                                        current-value: "绿茶 / Green Tea";
+                                    ProgressIndicator {
+                                        progress: root.slider-val / 100.0;
+                                        indeterminate: false;
                                     }
+                                    Text {
+                                        text: "不确定进度 / Indeterminate:";
+                                        vertical-alignment: center;
+                                    }
+                                    ProgressIndicator {
+                                        indeterminate: root.switch-loading;
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 6px;
+                                        alignment: start;
 
-                                    Rectangle { }
+                                        Spinner {
+                                            indeterminate: root.switch-loading;
+                                            width: 20px;
+                                            height: 20px;
+                                        }
+
+                                        Text {
+                                            text: root.switch-loading ? "任务运行中..." : "已就绪";
+                                            vertical-alignment: center;
+                                            font-size: 12px;
+                                            color: root.switch-loading ? MicaTheme.accent : MicaTheme.text-secondary;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -241,162 +474,621 @@ export component AppWindow inherits Window {
             // --- 第二个标签页：高级视图 / Tab 2: Advanced Views ---
             Tab {
                 title: "高级视图 / Advanced Views";
-                HorizontalBox {
-                    padding: 20px;
-                    spacing: 20px;
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 12px;
+                        padding-bottom: 16px;
+                        spacing: 12px;
 
-                    VerticalBox {
-                        Text {
-                            text: "标准列表 / StandardListView";
-                            font-weight: 700;
+                        // 第一行：列表与表格并排
+                        HorizontalLayout {
+                            spacing: 14px;
+
+                            VerticalLayout {
+                                width: 340px;
+                                spacing: 6px;
+
+                                HorizontalLayout {
+                                    alignment: space-between;
+
+                                    Text {
+                                        text: "系统服务与模块 / Services";
+                                        font-weight: 700;
+                                        color: MicaTheme.text-primary;
+                                        vertical-alignment: center;
+                                    }
+
+                                    MicaButton {
+                                        text: root.use-mica-list ? "动效列表 (Mica)" : "标准列表 (Std)";
+                                        height: 24px;
+                                        clicked => {
+                                            root.use-mica-list = !root.use-mica-list;
+                                        }
+                                    }
+                                }
+
+                                if root.use-mica-list: MicaListView {
+                                    items: root.mica-list-items;
+                                    current-item <=> root.list-selected-index;
+                                    pulse: root.dwm-pulse;
+                                    sweep-x: root.dwm-sweep-x;
+                                    height: 230px;
+                                    item-clicked(idx) => {
+                                        if (idx == 0) {
+                                            root.dwm-sweep-x = (root.dwm-sweep-x == 0px) ? 380px : 0px;
+                                        }
+                                    }
+                                }
+
+                                if !root.use-mica-list: StandardListView {
+                                    model: root.list-data;
+                                    current-item <=> root.list-selected-index;
+                                    height: 230px;
+                                }
+
+                                // 列表项选中状态指示卡
+                                Rectangle {
+                                    height: 38px;
+                                    border-radius: 4px;
+                                    background: MicaTheme.surface;
+                                    border-width: 1px;
+                                    border-color: MicaTheme.border;
+
+                                    HorizontalLayout {
+                                        padding-left: 10px;
+                                        padding-right: 10px;
+                                        spacing: 8px;
+                                        alignment: space-between;
+
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            alignment: start;
+
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 8px;
+                                                    height: 8px;
+                                                    border-radius: 4px;
+                                                    background: #107c41;
+                                                    opacity: root.dwm-pulse ? 1.0 : 0.4;
+                                                    animate opacity {
+                                                        duration: 600ms;
+                                                        easing: ease-in-out;
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: root.list-selected-index == 0
+                                                    ? "Windows 11 DWM 合成器 — 核心视觉合成已就绪 (60/144Hz 垂直同步)"
+                                                    : "模块状态: " + root.list-data[root.list-selected-index].text;
+                                                font-size: 11px;
+                                                color: MicaTheme.text-primary;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+                                        }
+
+                                        if root.list-selected-index == 0: MicaButton {
+                                            text: "切换材质";
+                                            height: 24px;
+                                            clicked => {
+                                                root.dwm-backdrop-index = (root.dwm-backdrop-index >= 3) ? 0 : (root.dwm-backdrop-index + 1);
+                                                root.change-dwm-backdrop(root.dwm-backdrop-index);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 6px;
+
+                                Text {
+                                    text: "标准表格 / StandardTableView (全家桶控件与动效特性)";
+                                    font-weight: 700;
+                                    color: MicaTheme.text-primary;
+                                }
+
+                                StandardTableView {
+                                    columns: [
+                                        { title: "ID", width: 45px },
+                                        { title: "控件名称 / Component", width: 155px },
+                                        { title: "类别 / Category", width: 110px },
+                                        { title: "动效特性 / Feature", width: 170px }
+                                    ];
+                                    rows: root.table-rows;
+                                    height: 272px;
+                                }
+                            }
                         }
 
-                        StandardListView {
-                            model: list-data;
-                        }
-                    }
+                        // 第二行：官方关于组件与系统运行环境
+                        GroupBox {
+                            title: "官方关于组件与系统运行环境 / About Slint & Runtime Environment";
 
-                    VerticalBox {
-                        Text {
-                            text: "标准表格 / StandardTableView";
-                            font-weight: 700;
-                        }
+                            HorizontalLayout {
+                                spacing: 18px;
+                                padding: 6px;
 
-                        StandardTableView {
-                            columns: [
-                                { title: "ID", width: 50px },
-                                { title: "姓名 / Name", width: 140px },
-                                { title: "状态 / Status", width: 120px }
-                            ];
-                            rows: table-rows;
+                                AboutSlint {
+                                    height: 110px;
+                                    width: 320px;
+                                }
+
+                                VerticalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+
+                                    Text {
+                                        text: "系统运行信息 / System Runtime Info";
+                                        font-weight: 700;
+                                        color: MicaTheme.text-primary;
+                                    }
+
+                                    Text {
+                                        text: "• 操作系统: Windows 11 / Windows 10 (DWM 合成 API 就绪)";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-secondary;
+                                    }
+
+                                    Text {
+                                        text: "• 材质状态: " + (root.is-mica-active ? "已成功激活 (DWM_SYSTEMBACKDROP_TYPE::MICA)" : "回退为 Palette 调色板背景");
+                                        font-size: 12px;
+                                        color: MicaTheme.accent;
+                                    }
+
+                                    Text {
+                                        text: "• 窗口框架: 无边框 DWM 阴影 + CBT 同步注入 + Snap Layouts 贴靠支持";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-secondary;
+                                    }
+
+                                    Text {
+                                        text: "• 编译器与标准: MSVC 2022 / C++20 / Slint 1.17.1 Fluent 视觉主题";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-secondary;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
             // --- 第三个标签页：动效 / Tab 3: Motion ---
-            // 集中展示自绘控件的动画；前两页仍然原样演示 std-widgets，
-            // 因此"标准组件全家桶"的定位不受影响。
-            // Showcases the animated self-drawn widgets; the first two tabs keep
-            // demoing std-widgets unchanged, so the std-widgets showcase remains.
             Tab {
                 title: "动效 / Motion";
                 ScrollView {
-                    VerticalBox {
-                        padding: 20px;
-                        spacing: 16px;
+                    VerticalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        padding-top: 12px;
+                        padding-bottom: 16px;
+                        spacing: 12px;
                         alignment: start;
 
                         Text {
-                            text: "以下控件为自绘实现，动画统一取 60 / 100 / 150 / 200ms，缓动 cubic-bezier(0, 0, 0.58, 1)。";
+                            text: "以下为 Win11 Fluent 自绘动效控件全家桶：统一 60/100/150/200ms 节奏，遵循 cubic-bezier(0,0,0.58,1) 与 lively 空间过冲缓动。";
                             font-size: 12px;
                             color: MicaTheme.text-secondary;
                             wrap: word-wrap;
                         }
 
-                        // 按钮状态 / Button states
+                        // 1. 按钮状态
                         MicaExpander {
-                            title: "按钮状态 / Button States — 颜色过渡与焦点环";
+                            title: "按钮状态 / Button States — 100ms 颜色过渡与 2px 浮现焦点环";
                             expanded: true;
-                            content-height: 56px;
+                            content-height: 52px;
 
-                            HorizontalBox {
+                            HorizontalLayout {
                                 spacing: 12px;
                                 alignment: start;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
 
                                 MicaButton {
                                     text: "主要按钮 / Primary";
                                     primary: true;
+                                    clicked => { root.motion-clicks += 1; }
                                 }
 
                                 MicaButton {
                                     text: "次要按钮 / Secondary";
+                                    clicked => { root.motion-clicks += 1; }
                                 }
 
                                 MicaButton {
-                                    text: "禁用 / Disabled";
+                                    text: "禁用态 / Disabled";
                                     enabled: false;
+                                }
+
+                                Text {
+                                    text: "已点击: \{root.motion-clicks} 次 | 交互细节: 按下文字下沉 1px，Tab 键浮现 2px 焦点环";
+                                    font-size: 12px;
+                                    color: MicaTheme.text-secondary;
+                                    vertical-alignment: center;
                                 }
                             }
                         }
 
-                        // 开关 / Switch
+                        // 2. 开关
                         MicaExpander {
-                            title: "开关 / Switch — 滑块滑动与按压缩放";
+                            title: "开关控件 / Switch — 滑块弹性位移、按压缩放与外层光晕";
                             expanded: true;
                             content-height: 48px;
 
-                            HorizontalBox {
-                                spacing: 24px;
+                            HorizontalLayout {
+                                spacing: 20px;
                                 alignment: start;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 12px;
+                                padding-bottom: 12px;
 
                                 MicaSwitch {
-                                    text: "启用通知 / Notifications";
+                                    text: "启用动效 / Motion";
                                     checked <=> root.motion-switch-on;
                                 }
 
                                 MicaSwitch {
-                                    text: "自动更新 / Auto update";
+                                    text: "自动同步 / Sync";
                                     checked <=> root.motion-switch-off;
+                                }
+
+                                MicaSwitch {
+                                    text: "锁定开关 / Disabled";
+                                    enabled: false;
+                                    checked: true;
+                                }
+
+                                Text {
+                                    text: "交互细节: lively 曲线过冲，悬停光晕淡入，按下滑块由 14px 放大至 16px";
+                                    font-size: 12px;
+                                    color: MicaTheme.text-secondary;
+                                    vertical-alignment: center;
                                 }
                             }
                         }
 
-                        // 标签栏 / Tab bar
+                        // 3. 标签栏与分页
                         MicaExpander {
-                            title: "标签栏 / Tab Bar — 指示条滑动与内容交叉淡入";
+                            title: "标签栏 / Tab Bar — 滑动指示条与页面内容交叉淡入";
                             expanded: true;
-                            content-height: 148px;
+                            content-height: 140px;
 
-                            MicaTabBar {
-                                tabs: ["第一页 / One", "第二页 / Two", "第三页 / Three"];
-                                current <=> root.motion-tab;
+                            VerticalLayout {
+                                spacing: 8px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 6px;
+                                padding-bottom: 8px;
+
+                                MicaTabBar {
+                                    tabs: ["动效节奏 / Rhythm", "语义调色 / Palette", "原生框架 / Platform"];
+                                    current <=> root.motion-tab;
+                                }
+
+                                Rectangle {
+                                    height: 74px;
+
+                                    MicaTabView {
+                                        width: 100%;
+                                        height: 100%;
+                                        current: root.motion-tab;
+
+                                        MicaTabPage {
+                                            index: 0;
+                                            current: root.motion-tab;
+                                            width: 100%;
+                                            height: 100%;
+
+                                            Text {
+                                                text: "• Motion.instant (60ms): 标题栏按钮、图标按压\n• Motion.fast (100ms): hover 底色、边框与文字颜色\n• Motion.normal (150ms): 状态切换、焦点环、图标交叉淡化\n• Motion.slow (200ms): MicaExpander 展开收起、面板入场";
+                                                font-size: 12px;
+                                                color: MicaTheme.text-primary;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        MicaTabPage {
+                                            index: 1;
+                                            current: root.motion-tab;
+                                            width: 100%;
+                                            height: 100%;
+
+                                            Text {
+                                                text: "• MicaTheme 统一集中深浅色适配（Palette.color-scheme == ColorScheme.dark）\n• 提供 text-primary, text-secondary, surface, surface-hover, border-strong\n• 终端日志面板专用的 log-surface 与 log-border 材质层";
+                                                font-size: 12px;
+                                                color: MicaTheme.text-primary;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        MicaTabPage {
+                                            index: 2;
+                                            current: root.motion-tab;
+                                            width: 100%;
+                                            height: 100%;
+
+                                            Text {
+                                                text: "• Win32 非客户区命中测试：完美支持 Windows 11 最大化按钮上的 Snap Layouts 贴靠菜单\n• CBT Hook 在 CreateWindowEx 瞬间注入 DWMWA_SYSTEMBACKDROP_TYPE，无闪烁\n• 失焦时标题栏与组件平滑淡化至 65% 不透明度";
+                                                font-size: 12px;
+                                                color: MicaTheme.text-primary;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                        }
 
-                            Rectangle {
-                                height: 72px;
+                        // 4. Windows 11 DWM 材质与视觉合成
+                        MicaExpander {
+                            title: "Windows 11 DWM 材质与视觉合成 / Win11 DWM Backdrop & Composition — 动态光效与材质联动";
+                            expanded: true;
+                            content-height: 156px;
 
-                                MicaTabView {
-                                    width: 100%;
-                                    height: 100%;
-                                    current: root.motion-tab;
+                            VerticalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                spacing: 10px;
 
-                                    MicaTabPage {
-                                        index: 0;
-                                        current: root.motion-tab;
-                                        width: 100%;
-                                        height: 100%;
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
 
-                                        Text {
-                                            text: "第一页内容 / First page";
-                                            color: MicaTheme.text-primary;
-                                            vertical-alignment: center;
+                                    Text {
+                                        text: "DWM 系统材质:";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-primary;
+                                        vertical-alignment: center;
+                                    }
+
+                                    MicaButton {
+                                        text: "Mica (默认亚克力)";
+                                        primary: root.dwm-backdrop-index == 0;
+                                        clicked => {
+                                            root.dwm-backdrop-index = 0;
+                                            root.change-dwm-backdrop(0);
                                         }
                                     }
 
-                                    MicaTabPage {
-                                        index: 1;
-                                        current: root.motion-tab;
-                                        width: 100%;
-                                        height: 100%;
-
-                                        Text {
-                                            text: "第二页内容 / Second page";
-                                            color: MicaTheme.text-primary;
-                                            vertical-alignment: center;
+                                    MicaButton {
+                                        text: "Acrylic (毛玻璃)";
+                                        primary: root.dwm-backdrop-index == 1;
+                                        clicked => {
+                                            root.dwm-backdrop-index = 1;
+                                            root.change-dwm-backdrop(1);
                                         }
                                     }
 
-                                    MicaTabPage {
-                                        index: 2;
-                                        current: root.motion-tab;
-                                        width: 100%;
-                                        height: 100%;
+                                    MicaButton {
+                                        text: "Mica Alt (深层)";
+                                        primary: root.dwm-backdrop-index == 2;
+                                        clicked => {
+                                            root.dwm-backdrop-index = 2;
+                                            root.change-dwm-backdrop(2);
+                                        }
+                                    }
 
-                                        Text {
-                                            text: "第三页内容 / Third page";
-                                            color: MicaTheme.text-primary;
-                                            vertical-alignment: center;
+                                    MicaButton {
+                                        text: "None (纯色表面)";
+                                        primary: root.dwm-backdrop-index == 3;
+                                        clicked => {
+                                            root.dwm-backdrop-index = 3;
+                                            root.change-dwm-backdrop(3);
+                                        }
+                                    }
+                                }
+
+                                // DWM 动态合成模拟卡片
+                                dwm-canvas := Rectangle {
+                                    height: 80px;
+                                    clip: true;
+                                    border-radius: root.dwm-corner-radius * 1px;
+                                    border-width: 1px;
+                                    border-color: MicaTheme.accent.with-alpha(0.35);
+                                    background: root.dwm-backdrop-index == 0
+                                        ? (Palette.color-scheme == ColorScheme.dark ? #222222a0 : #ffffffc0)
+                                        : (root.dwm-backdrop-index == 1
+                                            ? (Palette.color-scheme == ColorScheme.dark ? #1a1a1acc : #f5f5f5dd)
+                                            : (root.dwm-backdrop-index == 2
+                                                ? (Palette.color-scheme == ColorScheme.dark ? #141414b0 : #fafafad0)
+                                                : (Palette.color-scheme == ColorScheme.dark ? #282828 : #ffffff)));
+
+                                    animate background {
+                                        duration: Motion.normal;
+                                        easing: Motion.standard;
+                                    }
+                                    animate border-radius {
+                                        duration: Motion.normal;
+                                        easing: Motion.standard;
+                                    }
+
+                                    // 模拟环境流光扫描
+                                    Rectangle {
+                                        x: root.dwm-sweep-x;
+                                        width: 120px;
+                                        height: 100%;
+                                        background: @linear-gradient(90deg, transparent 0%, #ffffff18 50%, transparent 100%);
+                                        animate x {
+                                            duration: 1200ms;
+                                            easing: Motion.lively;
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        padding-left: 14px;
+                                        padding-right: 14px;
+                                        spacing: 10px;
+                                        alignment: space-between;
+
+                                        VerticalLayout {
+                                            alignment: center;
+                                            spacing: 4px;
+
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: start;
+
+                                                // 呼吸绿灯
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    Rectangle {
+                                                        width: 8px;
+                                                        height: 8px;
+                                                        border-radius: 4px;
+                                                        background: #107c41;
+                                                        opacity: root.dwm-pulse ? 1.0 : 0.4;
+                                                        animate opacity {
+                                                            duration: 600ms;
+                                                            easing: ease-in-out;
+                                                        }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: "DWM 硬件合成器状态: 活跃 (Active Compositor)";
+                                                    font-size: 12px;
+                                                    font-weight: 700;
+                                                    color: MicaTheme.text-primary;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+
+                                            Text {
+                                                text: (root.dwm-backdrop-index == 0 ? "当前生效: DWMWA_SYSTEMBACKDROP_TYPE = 2 (Mica 亚克力材质)"
+                                                     : (root.dwm-backdrop-index == 1 ? "当前生效: DWMWA_SYSTEMBACKDROP_TYPE = 3 (Acrylic 经典毛玻璃)"
+                                                     : (root.dwm-backdrop-index == 2 ? "当前生效: DWMWA_SYSTEMBACKDROP_TYPE = 4 (Mica Alt 深层亚克力)"
+                                                     : "当前生效: DWMWA_SYSTEMBACKDROP_TYPE = 1 (None 禁用背景穿透)")))
+                                                    + " | 圆角: " + root.dwm-corner-radius + "px";
+                                                font-size: 11px;
+                                                color: MicaTheme.text-secondary;
+                                            }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            alignment: end;
+
+                                            MicaButton {
+                                                text: "圆角 8px";
+                                                primary: root.dwm-corner-radius == 8;
+                                                clicked => {
+                                                    root.dwm-corner-radius = 8;
+                                                    root.change-dwm-corner(8);
+                                                }
+                                            }
+
+                                            MicaButton {
+                                                text: "小圆角 4px";
+                                                primary: root.dwm-corner-radius == 4;
+                                                clicked => {
+                                                    root.dwm-corner-radius = 4;
+                                                    root.change-dwm-corner(4);
+                                                }
+                                            }
+
+                                            MicaButton {
+                                                text: "直角 0px";
+                                                primary: root.dwm-corner-radius == 0;
+                                                clicked => {
+                                                    root.dwm-corner-radius = 0;
+                                                    root.change-dwm-corner(0);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 5. 终端日志流面板实机展示
+                        MicaExpander {
+                            title: "终端日志流面板 / Terminal Log View — 逐行淡入与流式展示";
+                            expanded: true;
+                            content-height: 200px;
+
+                            VerticalLayout {
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+
+                                    MicaButton {
+                                        text: "➕ 追加日志 / Append";
+                                        primary: true;
+                                        clicked => { root.add-demo-log(); }
+                                    }
+
+                                    MicaButton {
+                                        text: "🔄 重置样本 / Reset";
+                                        clicked => { root.reset-demo-logs(); }
+                                    }
+
+                                    MicaButton {
+                                        text: "🗑️ 清空日志 / Clear";
+                                        clicked => { root.clear-demo-logs(); }
+                                    }
+
+                                    Text {
+                                        text: "当前行数: \{root.demo-logs.length} (点击追加日志体验逐行淡入与上滑动画)";
+                                        vertical-alignment: center;
+                                        font-size: 12px;
+                                        color: MicaTheme.text-secondary;
+                                    }
+                                }
+
+                                MicaLogView {
+                                    height: 136px;
+                                    lines: root.demo-logs;
+                                }
+                            }
+                        }
+
+                        // 6. Win11 动效列表视图实机展示
+                        MicaExpander {
+                            title: "列表视图 / MicaListView — Win11 导航指示条弹性滑动与状态徽章呼吸";
+                            expanded: true;
+                            content-height: 270px;
+
+                            VerticalLayout {
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                padding-left: 12px;
+                                padding-right: 12px;
+                                spacing: 8px;
+
+                                Text {
+                                    text: "点击列表项（特别是 Windows 11 DWM 合成器）体验指示条弹性滑动、呼吸绿灯徽章与流光扫掠动画：";
+                                    font-size: 12px;
+                                    color: MicaTheme.text-secondary;
+                                }
+
+                                MicaListView {
+                                    items: root.mica-list-items;
+                                    current-item <=> root.list-selected-index;
+                                    pulse: root.dwm-pulse;
+                                    sweep-x: root.dwm-sweep-x;
+                                    height: 230px;
+                                    item-clicked(idx) => {
+                                        if (idx == 0) {
+                                            root.dwm-sweep-x = (root.dwm-sweep-x == 0px) ? 380px : 0px;
                                         }
                                     }
                                 }

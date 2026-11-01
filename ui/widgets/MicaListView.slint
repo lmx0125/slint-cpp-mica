@@ -1,0 +1,215 @@
+// ============================================================================
+// Win11 Fluent 自绘动效列表 / Win11 Fluent Mica List View
+//
+// 动效细节 / Motion details:
+//   · 100ms Hover 与 60ms Press 背景平滑过渡；
+//   · Win11 标志性左侧强调色指示条在列表项之间弹性滑动（Motion.lively 空间过冲）；
+//   · 未选中的列表项鼠标扫过时显示 8px 预览指示块；
+//   · 活跃项徽章（如 Windows 11 DWM 合成器）带有 1000ms 呼吸动画与微光渐变；
+//   · 点击或选中时触发流光扫掠动画。
+// ============================================================================
+import { Motion, MicaTheme } from "../common/motion.slint";
+import { Palette } from "std-widgets.slint";
+
+export struct MicaListItemData {
+    icon: string,
+    title: string,
+    badge: string,
+    badge-active: bool,
+}
+
+export component MicaListView inherits Rectangle {
+    in property <[MicaListItemData]> items: [];
+    in-out property <int> current-item: 0;
+    in property <bool> pulse: true;
+    in-out property <length> sweep-x: 0px;
+    callback item-clicked(int);
+
+    min-height: 230px;
+    border-radius: 6px;
+    background: MicaTheme.surface;
+    border-width: 1px;
+    border-color: MicaTheme.border;
+    clip: true;
+
+    // 单个弹性滑动指示条：在项之间上下滑动 (Win11 经典指示条)
+    // Vertical selection pill indicator sliding smoothly between items
+    indicator := Rectangle {
+        x: 3px;
+        y: root.items.length > 0
+            ? 3px + root.current-item * 32px + (30px - 16px) / 2
+            : 0px;
+        width: 3px;
+        height: root.items.length > 0 ? 16px : 0px;
+        border-radius: 1.5px;
+        background: MicaTheme.accent;
+        z: 10;
+
+        animate y {
+            duration: Motion.normal;
+            easing: Motion.lively;
+        }
+        animate height {
+            duration: Motion.fast;
+            easing: Motion.standard;
+        }
+    }
+
+    // 内部垂直布局排列各列表项
+    VerticalLayout {
+        padding: 3px;
+        spacing: 2px;
+        alignment: start;
+
+        for item[i] in root.items: item-row := Rectangle {
+            height: 30px;
+            border-radius: 4px;
+            clip: true;
+
+            // 背景颜色过渡：hover 100ms，按下 60ms
+            background: i == root.current-item
+                ? MicaTheme.surface-selected
+                : (item-touch.pressed
+                    ? MicaTheme.surface-pressed
+                    : (item-touch.has-hover ? MicaTheme.surface-hover : transparent));
+
+            animate background {
+                duration: item-touch.pressed ? Motion.instant : Motion.fast;
+                easing: Motion.standard;
+            }
+
+            // 悬停预览指示点（未选中时鼠标扫过提示）
+            Rectangle {
+                x: 0px;
+                y: (parent.height - 8px) / 2;
+                width: 3px;
+                height: 8px;
+                border-radius: 1.5px;
+                background: MicaTheme.accent.with-alpha(0.4);
+                opacity: (item-touch.has-hover && i != root.current-item) ? 1.0 : 0.0;
+
+                animate opacity {
+                    duration: Motion.fast;
+                    easing: Motion.standard;
+                }
+            }
+
+            // DWM 合成器高光流光（当选中首项时展现扫掠）
+            if i == 0: Rectangle {
+                x: root.sweep-x;
+                width: 80px;
+                height: 100%;
+                background: @linear-gradient(90deg, transparent 0%, #ffffff22 50%, transparent 100%);
+                opacity: (i == root.current-item) ? 1.0 : 0.0;
+                animate x {
+                    duration: 1000ms;
+                    easing: Motion.lively;
+                }
+                animate opacity {
+                    duration: Motion.normal;
+                    easing: Motion.standard;
+                }
+            }
+
+            // 内容水平排列（垂直居中布局）
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 10px;
+                spacing: 8px;
+                alignment: space-between;
+
+                // 左侧图标与文本垂直居中容器
+                VerticalLayout {
+                    alignment: center;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        // 图标
+                        Text {
+                            text: item.icon;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                            opacity: item-touch.has-hover ? 1.0 : 0.85;
+                            animate opacity {
+                                duration: Motion.fast;
+                                easing: Motion.standard;
+                            }
+                        }
+
+                        // 标题文字
+                        Text {
+                            text: item.title;
+                            font-size: 12px;
+                            font-weight: (i == root.current-item) ? 600 : 400;
+                            color: (i == root.current-item) ? MicaTheme.text-primary : MicaTheme.text-secondary;
+                            vertical-alignment: center;
+                            overflow: elide;
+
+                            animate color {
+                                duration: Motion.fast;
+                                easing: Motion.standard;
+                            }
+                        }
+                    }
+                }
+
+                // 右侧状态徽章垂直居中容器 / Status badge centered vertically
+                VerticalLayout {
+                    alignment: center;
+
+                    if item.badge != "": Rectangle {
+                        height: 18px;
+                        border-radius: 4px;
+                        background: item.badge-active
+                            ? (Palette.color-scheme == ColorScheme.dark ? #107c4125 : #107c4118)
+                            : MicaTheme.surface-hover;
+                        border-width: 1px;
+                        border-color: item.badge-active ? #107c4155 : MicaTheme.border;
+
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 5px;
+                            alignment: center;
+
+                            // 呼吸绿灯垂直居中容器 (活跃项展示)
+                            if item.badge-active: VerticalLayout {
+                                alignment: center;
+
+                                Rectangle {
+                                    width: 6px;
+                                    height: 6px;
+                                    border-radius: 3px;
+                                    background: #107c41;
+                                    opacity: root.pulse ? 1.0 : 0.35;
+                                    animate opacity {
+                                        duration: 600ms;
+                                        easing: ease-in-out;
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: item.badge;
+                                font-size: 10px;
+                                font-weight: 600;
+                                color: item.badge-active ? #107c41 : MicaTheme.text-secondary;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            item-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.current-item = i;
+                    root.item-clicked(i);
+                }
+            }
+        }
+    }
+}

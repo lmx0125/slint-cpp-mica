@@ -96,7 +96,7 @@ export component TerminalTitlebar inherits Rectangle {
             background: root.min-pressed ? root.btn-pressed-bg :
                 root.min-hover ? root.btn-hover-bg : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
@@ -113,9 +113,9 @@ export component TerminalTitlebar inherits Rectangle {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 // 按下时图标轻微变淡 / Slightly dim the glyph on press
-                opacity: root.min-pressed ? 0.82 : 1;
+                opacity: root.min-pressed ? 0.72 : (root.min-hover ? 1 : 0.88);
                 animate opacity {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
             }
@@ -127,7 +127,7 @@ export component TerminalTitlebar inherits Rectangle {
             background: root.max-pressed ? root.btn-pressed-bg :
                 root.max-hover ? root.btn-hover-bg : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
@@ -138,7 +138,6 @@ export component TerminalTitlebar inherits Rectangle {
             }
 
             // 未最大化图标：常驻元素，用 opacity 交叉淡化
-            // Not-maximized glyph: kept alive and cross-faded via opacity
             Path {
                 width: 10px;
                 height: 10px;
@@ -146,7 +145,7 @@ export component TerminalTitlebar inherits Rectangle {
                 y: (parent.height - self.height) / 2;
                 stroke: root.foreground-color;
                 stroke-width: 1px;
-                opacity: root.maximized ? 0 : (root.max-pressed ? 0.82 : 1);
+                opacity: root.maximized ? 0 : (root.max-pressed ? 0.72 : (root.max-hover ? 1 : 0.88));
                 animate opacity {
                     duration: Motion.normal;
                     easing: Motion.standard;
@@ -207,7 +206,6 @@ export component TerminalTitlebar inherits Rectangle {
             }
 
             // 已最大化图标：常驻元素，与上方图标交叉淡化
-            // Maximized glyph: kept alive and cross-faded against the glyph above
             Path {
                 width: 10px;
                 height: 10px;
@@ -215,7 +213,7 @@ export component TerminalTitlebar inherits Rectangle {
                 y: (parent.height - self.height) / 2;
                 stroke: root.foreground-color;
                 stroke-width: 1px;
-                opacity: root.maximized ? (root.max-pressed ? 0.82 : 1) : 0;
+                opacity: root.maximized ? (root.max-pressed ? 0.72 : (root.max-hover ? 1 : 0.88)) : 0;
                 animate opacity {
                     duration: Motion.normal;
                     easing: Motion.standard;
@@ -304,7 +302,7 @@ export component TerminalTitlebar inherits Rectangle {
             background: root.close-pressed ? MicaTheme.close-pressed :
                 root.close-hover ? MicaTheme.close-hover : transparent;
             animate background {
-                duration: Motion.instant;
+                duration: Motion.fast;
                 easing: Motion.standard;
             }
 
@@ -323,12 +321,12 @@ export component TerminalTitlebar inherits Rectangle {
                     ? #ffffff : root.foreground-color;
                 stroke-width: 1px;
                 animate stroke {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
                 opacity: root.close-pressed ? 0.82 : 1;
                 animate opacity {
-                    duration: Motion.instant;
+                    duration: Motion.fast;
                     easing: Motion.standard;
                 }
 
