@@ -64,24 +64,24 @@ export component AppWindow inherits Window {
     // Mica 状态控制（由 C++ 平台层注入） / Mica active status (controlled by C++)
     in-out property <bool> is-mica-active: false;
 
-    // 毛玻璃底色遮罩透明度（0% 纯色遮罩 -> 100% 极限通透纯透）
-    in-out property <float> glass-transparency: 95.0;
-    in-out property <int> glass-spin-val: 95;
+    // 默认启用真实毛玻璃（index 1 = DWM Acrylic 硬件双通高斯虚化）
+    in-out property <int> dwm-backdrop-index: 1;
 
-    // 卡片表面通透度（0% 实心卡片 -> 100% 极限通透卡片）
-    in-out property <float> card-transparency: 70.0;
-    in-out property <int> card-spin-val: 70;
+    // 极透亚克力底色透光度（默认 85% 透光，保留 15% 极透微光，让底层高斯虚化清晰饱满）
+    in-out property <float> glass-transparency: 85.0;
+    in-out property <int> glass-spin-val: 85;
 
-    // 窗口物理全局穿透度（50% ~ 100%）
-    in-out property <float> window-overall-alpha: 100.0;
-    in-out property <int> window-alpha-spin: 100;
+    // 卡片表面透光率（默认 80%：悬浮亚克力透光卡片，虚化完全穿透）
+    in-out property <float> card-transparency: 80.0;
+    in-out property <int> card-spin-val: 80;
 
-    callback change-window-alpha(float);
+    // 亚克力顶部微光反射图层开关
+    in-out property <bool> enable-acrylic-luster: true;
 
-    // Mica / Acrylic / Aero 激活时根据透明度调节底色遮罩，未激活时回退到纯色 Palette.background
+    // 极透亚克力底色：浅浅的 15% 微光遮罩，既保证了亚克力的质感，又让底层高斯虚化极其清晰明亮！
     background: self.is-mica-active
         ? (Palette.color-scheme == ColorScheme.dark
-            ? #000000.with-alpha((100.0 - root.glass-transparency) / 100.0)
+            ? #0d0d0d.with-alpha((100.0 - root.glass-transparency) / 100.0)
             : #ffffff.with-alpha((100.0 - root.glass-transparency) / 100.0))
         : Palette.background;
 
@@ -122,7 +122,6 @@ export component AppWindow inherits Window {
     in-out property <bool> motion-progress-indet: false;
 
     // Windows 11 DWM 材质与视觉合成状态 / Win11 DWM backdrop & composition states
-    in-out property <int> dwm-backdrop-index: 1;
     in-out property <int> dwm-corner-radius: 8;
     in-out property <length> dwm-sweep-x: 0px;
     in-out property <bool> dwm-pulse: true;
@@ -488,81 +487,12 @@ export component AppWindow inherits Window {
 
                                 Row {
                                     Text {
-                                        text: "毛玻璃透明度 / Glass:";
+                                        text: "亚克力底色 / Tint:";
                                         vertical-alignment: center;
                                         font-weight: 500;
                                     }
                                     MicaSlider {
-                                        minimum: 0.0;
-                                        maximum: 100.0;
-                                        value <=> root.glass-transparency;
-                                        changed(v) => {
-                                            root.glass-spin-val = Math.round(v);
-                                        }
-                                    }
-                                    Text {
-                                        text: "微调步进 / SpinBox:";
-                                        vertical-alignment: center;
-                                    }
-                                    SpinBox {
-                                        minimum: 0;
-                                        maximum: 100;
-                                        value <=> root.glass-spin-val;
-                                    }
-                                    Text {
-                                        text: "透明: \{Math.round(root.glass-transparency)}% (遮罩: \{Math.round(100 - root.glass-transparency)}%)";
-                                        vertical-alignment: center;
-                                        font-weight: 700;
-                                        color: MicaTheme.accent;
-                                    }
-                                }
-
-                                Row {
-                                    Text {
-                                        text: "材质切换 / Backdrop:";
-                                        vertical-alignment: center;
-                                        font-weight: 500;
-                                    }
-                                    HorizontalLayout {
-                                        spacing: 6px;
-                                        Button {
-                                            text: "Acrylic (毛玻璃)";
-                                            primary: root.dwm-backdrop-index == 1;
-                                            clicked => {
-                                                root.dwm-backdrop-index = 1;
-                                                root.change-dwm-backdrop(1);
-                                            }
-                                        }
-                                        Button {
-                                            text: "Mica (云母材质)";
-                                            primary: root.dwm-backdrop-index == 0;
-                                            clicked => {
-                                                root.dwm-backdrop-index = 0;
-                                                root.change-dwm-backdrop(0);
-                                            }
-                                        }
-                                    }
-                                    Text {
-                                        text: "当前系统合成:";
-                                        vertical-alignment: center;
-                                    }
-                                    Text {
-                                        text: root.dwm-backdrop-index == 1 ? "Acrylic (动态毛玻璃模糊)" : (root.dwm-backdrop-index == 0 ? "Mica (桌面微光折射)" : "其他材质");
-                                        vertical-alignment: center;
-                                        font-weight: 700;
-                                        color: MicaTheme.accent;
-                                    }
-                                    Text { text: ""; }
-                                }
-
-                                Row {
-                                    Text {
-                                        text: "毛玻璃底色 / Backdrop:";
-                                        vertical-alignment: center;
-                                        font-weight: 500;
-                                    }
-                                    MicaSlider {
-                                        minimum: 0.0;
+                                        minimum: 50.0;
                                         maximum: 100.0;
                                         value <=> root.glass-transparency;
                                         changed(v) => {
@@ -574,12 +504,12 @@ export component AppWindow inherits Window {
                                         vertical-alignment: center;
                                     }
                                     SpinBox {
-                                        minimum: 0;
+                                        minimum: 50;
                                         maximum: 100;
                                         value <=> root.glass-spin-val;
                                     }
                                     Text {
-                                        text: "底色透光: \{Math.round(root.glass-transparency)}% (遮罩: \{Math.round(100 - root.glass-transparency)}%)";
+                                        text: "透光: \{Math.round(root.glass-transparency)}% (微光遮罩: \{Math.round(100 - root.glass-transparency)}%)";
                                         vertical-alignment: center;
                                         font-weight: 700;
                                         color: MicaTheme.accent;
@@ -598,7 +528,7 @@ export component AppWindow inherits Window {
                                         value <=> root.card-transparency;
                                         changed(v) => {
                                             root.card-spin-val = Math.round(v);
-                                            MicaTheme.surface-opacity = (100.0 - v) / 100.0 * 0.65 + 0.15;
+                                            MicaTheme.surface-transparency = v / 100.0;
                                         }
                                     }
                                     Text {
@@ -611,7 +541,7 @@ export component AppWindow inherits Window {
                                         value <=> root.card-spin-val;
                                     }
                                     Text {
-                                        text: "卡片通透: \{Math.round(root.card-transparency)}% (半透明表面)";
+                                        text: "卡片通透: \{Math.round(root.card-transparency)}% (高斯虚化贯穿卡片)";
                                         vertical-alignment: center;
                                         font-weight: 700;
                                         color: MicaTheme.accent;
@@ -620,46 +550,14 @@ export component AppWindow inherits Window {
 
                                 Row {
                                     Text {
-                                        text: "全局物理穿透 / Alpha:";
-                                        vertical-alignment: center;
-                                        font-weight: 500;
-                                    }
-                                    MicaSlider {
-                                        minimum: 50.0;
-                                        maximum: 100.0;
-                                        value <=> root.window-overall-alpha;
-                                        changed(v) => {
-                                            root.window-alpha-spin = Math.round(v);
-                                            root.change-window-alpha(v);
-                                        }
-                                    }
-                                    Text {
-                                        text: "微调步进:";
-                                        vertical-alignment: center;
-                                    }
-                                    SpinBox {
-                                        minimum: 50;
-                                        maximum: 100;
-                                        value <=> root.window-alpha-spin;
-                                    }
-                                    Text {
-                                        text: "窗口穿透: \{Math.round(root.window-overall-alpha)}% (Win32 Layered)";
-                                        vertical-alignment: center;
-                                        font-weight: 700;
-                                        color: MicaTheme.accent;
-                                    }
-                                }
-
-                                Row {
-                                    Text {
-                                        text: "合成引擎 / Engine:";
+                                        text: "合成材质 / Material:";
                                         vertical-alignment: center;
                                         font-weight: 500;
                                     }
                                     HorizontalLayout {
                                         spacing: 6px;
                                         Button {
-                                            text: "Acrylic (毛玻璃)";
+                                            text: "Acrylic (毛玻璃高斯虚化)";
                                             primary: root.dwm-backdrop-index == 1;
                                             clicked => {
                                                 root.dwm-backdrop-index = 1;
@@ -667,39 +565,29 @@ export component AppWindow inherits Window {
                                             }
                                         }
                                         Button {
-                                            text: "Aero (超透高斯)";
-                                            primary: root.dwm-backdrop-index == 4;
-                                            clicked => {
-                                                root.dwm-backdrop-index = 4;
-                                                root.change-dwm-backdrop(4);
-                                            }
-                                        }
-                                        Button {
-                                            text: "Ultra (极透亚克力)";
-                                            primary: root.dwm-backdrop-index == 5;
-                                            clicked => {
-                                                root.dwm-backdrop-index = 5;
-                                                root.change-dwm-backdrop(5);
-                                            }
-                                        }
-                                        Button {
-                                            text: "Mica (云母)";
+                                            text: "Mica (云母材质)";
                                             primary: root.dwm-backdrop-index == 0;
                                             clicked => {
                                                 root.dwm-backdrop-index = 0;
                                                 root.change-dwm-backdrop(0);
                                             }
                                         }
+                                        Button {
+                                            text: "Tabbed (深层亚克力)";
+                                            primary: root.dwm-backdrop-index == 2;
+                                            clicked => {
+                                                root.dwm-backdrop-index = 2;
+                                                root.change-dwm-backdrop(2);
+                                            }
+                                        }
                                     }
                                     Text {
-                                        text: "当前系统合成状态:";
+                                        text: "当前虚化状态:";
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: root.dwm-backdrop-index == 4 ? "Aero Glass (纯净晶透高斯毛玻璃)"
-                                            : (root.dwm-backdrop-index == 5 ? "Ultra Acrylic (极透无深色遮罩)"
-                                            : (root.dwm-backdrop-index == 1 ? "Acrylic (DWM 动态高斯模糊)"
-                                            : "Mica (桌面微光折射)"));
+                                        text: root.dwm-backdrop-index == 1 ? "Acrylic 硬件高斯模糊 (透射后方窗口)"
+                                            : (root.dwm-backdrop-index == 0 ? "Mica 桌面壁纸微光" : "Tabbed 深层亚克力");
                                         vertical-alignment: center;
                                         font-weight: 700;
                                         color: MicaTheme.accent;
@@ -1133,9 +1021,9 @@ export component AppWindow inherits Window {
 
                         // 4. Windows 11 DWM 材质与视觉合成
                         MicaExpander {
-                            title: "Windows 11 DWM 材质与视觉合成 / Win11 DWM Backdrop & Composition — 动态光效与超透引擎联动";
+                            title: "Windows 11 DWM 材质与视觉合成 / Win11 DWM Backdrop & Composition — 极透亚克力与动态高斯虚化";
                             expanded: true;
-                            content-height: 290px;
+                            content-height: 220px;
 
                             VerticalLayout {
                                 padding-left: 12px;
@@ -1156,20 +1044,20 @@ export component AppWindow inherits Window {
                                     }
 
                                     MicaButton {
-                                        text: "Mica (默认亚克力)";
-                                        primary: root.dwm-backdrop-index == 0;
-                                        clicked => {
-                                            root.dwm-backdrop-index = 0;
-                                            root.change-dwm-backdrop(0);
-                                        }
-                                    }
-
-                                    MicaButton {
-                                        text: "Acrylic (毛玻璃)";
+                                        text: "Acrylic (极透高斯虚化)";
                                         primary: root.dwm-backdrop-index == 1;
                                         clicked => {
                                             root.dwm-backdrop-index = 1;
                                             root.change-dwm-backdrop(1);
+                                        }
+                                    }
+
+                                    MicaButton {
+                                        text: "Mica (云母材质)";
+                                        primary: root.dwm-backdrop-index == 0;
+                                        clicked => {
+                                            root.dwm-backdrop-index = 0;
+                                            root.change-dwm-backdrop(0);
                                         }
                                     }
 
@@ -1179,24 +1067,6 @@ export component AppWindow inherits Window {
                                         clicked => {
                                             root.dwm-backdrop-index = 2;
                                             root.change-dwm-backdrop(2);
-                                        }
-                                    }
-
-                                    MicaButton {
-                                        text: "Aero Glass (超透高斯)";
-                                        primary: root.dwm-backdrop-index == 4;
-                                        clicked => {
-                                            root.dwm-backdrop-index = 4;
-                                            root.change-dwm-backdrop(4);
-                                        }
-                                    }
-
-                                    MicaButton {
-                                        text: "Ultra (极透亚克力)";
-                                        primary: root.dwm-backdrop-index == 5;
-                                        clicked => {
-                                            root.dwm-backdrop-index = 5;
-                                            root.change-dwm-backdrop(5);
                                         }
                                     }
 
@@ -1216,7 +1086,7 @@ export component AppWindow inherits Window {
                                     alignment: start;
 
                                     Text {
-                                        text: "毛玻璃底色通透 / Glass:";
+                                        text: "亚克力底色透光:";
                                         font-size: 12px;
                                         color: MicaTheme.text-primary;
                                         vertical-alignment: center;
@@ -1224,7 +1094,7 @@ export component AppWindow inherits Window {
 
                                     MicaSlider {
                                         width: 180px;
-                                        minimum: 0.0;
+                                        minimum: 50.0;
                                         maximum: 100.0;
                                         value <=> root.glass-transparency;
                                         changed(v) => {
@@ -1233,7 +1103,7 @@ export component AppWindow inherits Window {
                                     }
 
                                     Text {
-                                        text: "底色透光: \{Math.round(root.glass-transparency)}%";
+                                        text: "\{Math.round(root.glass-transparency)}%";
                                         font-size: 12px;
                                         font-weight: 700;
                                         color: MicaTheme.accent;
@@ -1241,7 +1111,7 @@ export component AppWindow inherits Window {
                                     }
 
                                     Text {
-                                        text: "卡片通透 / Cards:";
+                                        text: "卡片表面通透:";
                                         font-size: 12px;
                                         color: MicaTheme.text-primary;
                                         vertical-alignment: center;
@@ -1254,12 +1124,12 @@ export component AppWindow inherits Window {
                                         value <=> root.card-transparency;
                                         changed(v) => {
                                             root.card-spin-val = Math.round(v);
-                                            MicaTheme.surface-opacity = (100.0 - v) / 100.0 * 0.65 + 0.15;
+                                            MicaTheme.surface-transparency = v / 100.0;
                                         }
                                     }
 
                                     Text {
-                                        text: "卡片通透: \{Math.round(root.card-transparency)}%";
+                                        text: "\{Math.round(root.card-transparency)}%";
                                         font-size: 12px;
                                         font-weight: 700;
                                         color: MicaTheme.accent;
@@ -1267,38 +1137,6 @@ export component AppWindow inherits Window {
                                     }
                                 }
 
-                                HorizontalLayout {
-                                    spacing: 12px;
-                                    alignment: start;
-
-                                    Text {
-                                        text: "全局物理穿透 / Alpha:";
-                                        font-size: 12px;
-                                        color: MicaTheme.text-primary;
-                                        vertical-alignment: center;
-                                    }
-
-                                    MicaSlider {
-                                        width: 180px;
-                                        minimum: 50.0;
-                                        maximum: 100.0;
-                                        value <=> root.window-overall-alpha;
-                                        changed(v) => {
-                                            root.window-alpha-spin = Math.round(v);
-                                            root.change-window-alpha(v);
-                                        }
-                                    }
-
-                                    Text {
-                                        text: "窗口穿透: \{Math.round(root.window-overall-alpha)}% (Win32 Layered)";
-                                        font-size: 12px;
-                                        font-weight: 700;
-                                        color: MicaTheme.accent;
-                                        vertical-alignment: center;
-                                    }
-                                }
-
-                                // DWM 动态合成模拟卡片
                                 dwm-canvas := Rectangle {
                                     height: 80px;
                                     clip: true;

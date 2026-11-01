@@ -207,53 +207,13 @@ int main(int /*argc*/, char** /*argv*/)
         if (frame_holder && frame_holder->has_value()) {
             HWND hwnd = (*frame_holder)->hwnd();
             if (hwnd != nullptr) {
-                // index: 0 -> Mica, 1 -> Acrylic, 2 -> Tabbed, 3 -> None, 4 -> Aero Glass (超透高斯毛玻璃), 5 -> Ultra Acrylic (极透亚克力)
-                if (index == 4) {
-                    // 100% 纯净晶透高斯毛玻璃（SetWindowCompositionAttribute 绕过 Win11 DWM 遮罩）
-                    uint32_t none_type = 1;
-                    ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &none_type, sizeof(none_type));
-                    apply_accent_policy(hwnd, ACCENT_ENABLE_BLURBEHIND);
-                    std::printf("[Main] 已启用 SetWindowCompositionAttribute (Aero Glass 纯净晶透毛玻璃)\n");
-                } else if (index == 5) {
-                    // 极透亚克力（仅 2% 纯微底色）
-                    uint32_t none_type = 1;
-                    ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &none_type, sizeof(none_type));
-                    apply_accent_policy(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, 0x05000000);
-                    std::printf("[Main] 已启用 SetWindowCompositionAttribute (Ultra Acrylic 极透亚克力)\n");
-                } else {
-                    apply_accent_policy(hwnd, ACCENT_DISABLED);
-                    uint32_t type = (index == 0) ? 2 : (index == 1) ? 3 : (index == 2) ? 4 : 1;
-                    ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &type, sizeof(type));
-                    std::printf("[Main] DWM 背景材质已动态切换为: %u (index: %d)\n", type, index);
-                }
+                // index: 0 -> Mica (2), 1 -> Acrylic (3, 硬件高斯虚化毛玻璃), 2 -> Tabbed (4), 3 -> None (1)
+                uint32_t type = (index == 0) ? 2 : (index == 1) ? 3 : (index == 2) ? 4 : 1;
+                ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &type, sizeof(type));
                 ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
                 ::InvalidateRect(hwnd, nullptr, TRUE);
-            }
-        }
-    });
-
-    // 6d. 绑定窗口物理级全局穿透度（通过 WS_EX_LAYERED 与 SetLayeredWindowAttributes 实时调制）
-    app->on_change_window_alpha([frame_holder](float alpha_percent) {
-        if (frame_holder && frame_holder->has_value()) {
-            HWND hwnd = (*frame_holder)->hwnd();
-            if (hwnd != nullptr) {
-                LONG_PTR ex_style = ::GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-                if (alpha_percent >= 99.5f) {
-                    if (ex_style & WS_EX_LAYERED) {
-                        ::SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style & ~WS_EX_LAYERED);
-                        ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-                        ::InvalidateRect(hwnd, nullptr, TRUE);
-                    }
-                } else {
-                    if (!(ex_style & WS_EX_LAYERED)) {
-                        ::SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED);
-                    }
-                    BYTE b_alpha = static_cast<BYTE>(std::clamp(alpha_percent, 20.0f, 100.0f) * 255.0f / 100.0f);
-                    ::SetLayeredWindowAttributes(hwnd, 0, b_alpha, LWA_ALPHA);
-                }
-                std::printf("[Main] 窗口物理全局穿透度已更新: %.1f%%\n", alpha_percent);
+                std::printf("[Main] DWM 硬件材质已切换为: %u (index: %d, 1=Acrylic 硬件高斯虚化)\n", type, index);
             }
         }
     });

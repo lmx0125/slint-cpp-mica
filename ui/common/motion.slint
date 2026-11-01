@@ -35,36 +35,36 @@ export global Motion {
     out property <easing> lively: cubic-bezier(0.2, 0.9, 0.2, 1.06);
 }
 
-// 语义配色：把原本散落在各文件里的深浅色三元表达式集中到一处。
-// Semantic colors: gathers the dark/light ternaries previously scattered across files.
+// 语义配色：极透亚克力（Ultra-Clear Acrylic）与 Fluent 现代质感
 export global MicaTheme {
-    // 文本 / Text
+    // 文本 / Text（保持高对比度与清晰度）
     out property <color> text-primary:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff : #191919;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff : #111111;
     out property <color> text-secondary:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff99 : #00000099;
+        Palette.color-scheme == ColorScheme.dark ? #ffffffb8 : #00000099;
     out property <color> text-inactive:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff66 : #00000066;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff66 : #00000060;
 
-    // 卡片表面通透度（0.10 极透毛玻璃 -> 1.0 实心表面）
-    in-out property <float> surface-opacity: 0.45;
+    // 亚克力卡片透光率调节（默认 0.80：极透微光，底层虚化完全透出）
+    in-out property <float> surface-transparency: 0.80;
 
-    // 表面 / Surfaces（支持通透透射底层毛玻璃）
+    // 表面 / Surfaces（真实极透亚克力悬浮质感：微白雾感 + 极细描边）
     out property <color> surface:
         Palette.color-scheme == ColorScheme.dark
-            ? #2d2d2d.with-alpha(self.surface-opacity)
-            : #ffffff.with-alpha(self.surface-opacity + 0.20);
+            ? #ffffff.with-alpha((1.0 - self.surface-transparency) * 0.15 + 0.05)
+            : #ffffff.with-alpha((1.0 - self.surface-transparency) * 0.40 + 0.35);
     out property <color> surface-hover:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff18 : #00000010;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff1c : #ffffff60;
     out property <color> surface-pressed:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff22 : #0000001c;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff0c : #ffffff40;
     out property <color> surface-selected:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff2c : #00000014;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff20 : #ffffff70;
 
-    // 边框 / Borders
-    out property <color> border: Palette.border;
+    // 亚克力晶透边框（1px 微光切面）
+    out property <color> border:
+        Palette.color-scheme == ColorScheme.dark ? #ffffff1c : #00000015;
     out property <color> border-strong:
-        Palette.color-scheme == ColorScheme.dark ? #ffffff2e : #00000024;
+        Palette.color-scheme == ColorScheme.dark ? #ffffff30 : #00000028;
 
     // 强调色 / Accent
     out property <color> accent: Palette.accent-background;
@@ -82,8 +82,8 @@ export global MicaTheme {
     // 终端日志面板 / Terminal log panel
     out property <color> log-surface:
         Palette.color-scheme == ColorScheme.dark
-            ? #1e1e1e.with-alpha(self.surface-opacity)
-            : #f8f9fa.with-alpha(self.surface-opacity + 0.20);
+            ? #000000.with-alpha((1.0 - self.surface-transparency) * 0.25 + 0.12)
+            : #ffffff.with-alpha((1.0 - self.surface-transparency) * 0.35 + 0.30);
     out property <color> log-border:
         Palette.color-scheme == ColorScheme.dark ? #ffffff18 : #00000012;
 }
