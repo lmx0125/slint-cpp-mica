@@ -64,9 +64,17 @@ export component AppWindow inherits Window {
     // Mica 状态控制（由 C++ 平台层注入） / Mica active status (controlled by C++)
     in-out property <bool> is-mica-active: false;
 
-    // Mica 成功开启则透明，否则使用系统 Palette.background
-    // Transparent if Mica active, fallback to Palette.background if inactive
-    background: self.is-mica-active ? transparent : Palette.background;
+    // 毛玻璃透明度控制（0% 纯色遮罩 -> 100% 极限透明） / Glass transparency control (0% opaque -> 100% clear)
+    in-out property <float> glass-transparency: 75.0;
+    in-out property <int> glass-spin-val: 75;
+
+    // Mica / Acrylic 激活时根据透明度调节底色遮罩，未激活时回退到纯色 Palette.background
+    // When Mica/Acrylic active, apply dynamic backdrop tint; fallback to Palette.background if inactive
+    background: self.is-mica-active
+        ? (Palette.color-scheme == ColorScheme.dark
+            ? #000000.with-alpha((100.0 - root.glass-transparency) / 100.0)
+            : #ffffff.with-alpha((100.0 - root.glass-transparency) / 100.0))
+        : Palette.background;
 
     // 窗口标题（保持原样供 CBT Hook 精确匹配）
     // Window title (kept as-is for CBT Hook title matching)
@@ -467,6 +475,75 @@ export component AppWindow inherits Window {
                                         font-weight: 700;
                                         color: MicaTheme.accent;
                                     }
+                                }
+
+                                Row {
+                                    Text {
+                                        text: "毛玻璃透明度 / Glass:";
+                                        vertical-alignment: center;
+                                        font-weight: 500;
+                                    }
+                                    MicaSlider {
+                                        minimum: 0.0;
+                                        maximum: 100.0;
+                                        value <=> root.glass-transparency;
+                                        changed(v) => {
+                                            root.glass-spin-val = Math.round(v);
+                                        }
+                                    }
+                                    Text {
+                                        text: "微调步进 / SpinBox:";
+                                        vertical-alignment: center;
+                                    }
+                                    SpinBox {
+                                        minimum: 0;
+                                        maximum: 100;
+                                        value <=> root.glass-spin-val;
+                                    }
+                                    Text {
+                                        text: "透明: \{Math.round(root.glass-transparency)}% (遮罩: \{Math.round(100 - root.glass-transparency)}%)";
+                                        vertical-alignment: center;
+                                        font-weight: 700;
+                                        color: MicaTheme.accent;
+                                    }
+                                }
+
+                                Row {
+                                    Text {
+                                        text: "材质切换 / Backdrop:";
+                                        vertical-alignment: center;
+                                        font-weight: 500;
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 6px;
+                                        Button {
+                                            text: "Acrylic (毛玻璃)";
+                                            primary: root.dwm-backdrop-index == 1;
+                                            clicked => {
+                                                root.dwm-backdrop-index = 1;
+                                                root.change-dwm-backdrop(1);
+                                            }
+                                        }
+                                        Button {
+                                            text: "Mica (云母材质)";
+                                            primary: root.dwm-backdrop-index == 0;
+                                            clicked => {
+                                                root.dwm-backdrop-index = 0;
+                                                root.change-dwm-backdrop(0);
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        text: "当前系统合成:";
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: root.dwm-backdrop-index == 1 ? "Acrylic (动态毛玻璃模糊)" : (root.dwm-backdrop-index == 0 ? "Mica (桌面微光折射)" : "其他材质");
+                                        vertical-alignment: center;
+                                        font-weight: 700;
+                                        color: MicaTheme.accent;
+                                    }
+                                    Text { text: ""; }
                                 }
 
                                 Row {
@@ -897,7 +974,7 @@ export component AppWindow inherits Window {
                         MicaExpander {
                             title: "Windows 11 DWM 材质与视觉合成 / Win11 DWM Backdrop & Composition — 动态光效与材质联动";
                             expanded: true;
-                            content-height: 156px;
+                            content-height: 204px;
 
                             VerticalLayout {
                                 padding-left: 12px;
@@ -954,6 +1031,37 @@ export component AppWindow inherits Window {
                                     }
                                 }
 
+                                // 毛玻璃透明度实时调节滑块 / Real-time glass transparency slider
+                                HorizontalLayout {
+                                    spacing: 12px;
+                                    alignment: start;
+
+                                    Text {
+                                        text: "毛玻璃透明度调节 / Transparency:";
+                                        font-size: 12px;
+                                        color: MicaTheme.text-primary;
+                                        vertical-alignment: center;
+                                    }
+
+                                    MicaSlider {
+                                        width: 220px;
+                                        minimum: 0.0;
+                                        maximum: 100.0;
+                                        value <=> root.glass-transparency;
+                                        changed(v) => {
+                                            root.glass-spin-val = Math.round(v);
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "透明度: \{Math.round(root.glass-transparency)}% (底色遮罩: \{Math.round(100 - root.glass-transparency)}%)";
+                                        font-size: 12px;
+                                        font-weight: 700;
+                                        color: MicaTheme.accent;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
                                 // DWM 动态合成模拟卡片
                                 dwm-canvas := Rectangle {
                                     height: 80px;
@@ -962,11 +1070,17 @@ export component AppWindow inherits Window {
                                     border-width: 1px;
                                     border-color: MicaTheme.accent.with-alpha(0.35);
                                     background: root.dwm-backdrop-index == 0
-                                        ? (Palette.color-scheme == ColorScheme.dark ? #222222a0 : #ffffffc0)
+                                        ? (Palette.color-scheme == ColorScheme.dark
+                                            ? #222222.with-alpha((100.0 - root.glass-transparency) / 100.0)
+                                            : #ffffff.with-alpha((100.0 - root.glass-transparency) / 100.0))
                                         : (root.dwm-backdrop-index == 1
-                                            ? (Palette.color-scheme == ColorScheme.dark ? #1a1a1acc : #f5f5f5dd)
+                                            ? (Palette.color-scheme == ColorScheme.dark
+                                                ? #1a1a1a.with-alpha((100.0 - root.glass-transparency) / 100.0)
+                                                : #f5f5f5.with-alpha((100.0 - root.glass-transparency) / 100.0))
                                             : (root.dwm-backdrop-index == 2
-                                                ? (Palette.color-scheme == ColorScheme.dark ? #141414b0 : #fafafad0)
+                                                ? (Palette.color-scheme == ColorScheme.dark
+                                                    ? #141414.with-alpha((100.0 - root.glass-transparency) / 100.0)
+                                                    : #fafafa.with-alpha((100.0 - root.glass-transparency) / 100.0))
                                                 : (Palette.color-scheme == ColorScheme.dark ? #282828 : #ffffff)));
 
                                     animate background {
