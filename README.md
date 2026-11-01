@@ -111,11 +111,13 @@ buttons.show_close = true;
 
 ```cpp
 // src/windows/app/attributes.cpp
-attributes.with_acrylic()            // 换成亚克力
+attributes.with_acrylic()            // 换成亚克力（硬件双通高斯虚化）
           .with_always_on_top(true)  // 置顶
           .with_tool_window(true)    // 不进任务栏与 Alt+Tab
           .with_corner(platform::CornerPreference::RoundSmall);
 ```
+
+> 📖 **100% 高斯虚化毛玻璃专刊**：关于 Acrylic 实时穿透虚化、100% 极透参数、卡片悬浮、Win10 降级及零闪烁注入的完整原理与代码，详见 [**README_ACRYLIC_BLUR.md**](./docs/README_ACRYLIC_BLUR.md)。
 
 ### 3. 二级窗口关闭行为
 
