@@ -443,11 +443,14 @@ export component AppWindow inherits Window {
                                         text: "滑块调节 / Slider:";
                                         vertical-alignment: center;
                                     }
-                                    Slider {
+                                    MicaSlider {
                                         minimum: 0.0;
                                         maximum: 100.0;
                                         value <=> root.slider-val;
-                                        changed(v) => { root.spin-val = Math.round(v); }
+                                        changed(v) => {
+                                            root.spin-val = Math.round(v);
+                                            root.motion-slider-val = v;
+                                        }
                                     }
                                     Text {
                                         text: "微调步进 / SpinBox:";
